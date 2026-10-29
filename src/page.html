@@ -82,14 +82,24 @@
   .rond:active, .pilule:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--noir); }
   .rond svg { width: 20px; height: 20px; }
   .ligne2 { display: flex; gap: 8px; margin-top: 12px; }
-  .vues { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--creme); border: 3px solid var(--noir); box-shadow: 3px 3px 0 var(--noir); }
+  .vues { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(min-content, 1fr)); background: var(--creme); border: 3px solid var(--noir); box-shadow: 3px 3px 0 var(--noir); }
   .vues button { border: 0; border-left: 2px solid var(--noir); background: none; color: var(--noir); font-weight: 800; font-size: 11px;
-    text-transform: uppercase; letter-spacing: .04em; padding: 8px 0; min-height: 36px; }
+    text-transform: uppercase; letter-spacing: .04em; padding: 8px 4px; min-height: 36px; }
   .vues button:first-child { border-left: 0; }
   .vues button[aria-selected="true"] { background: var(--rouge-fond); color: var(--creme); }
   .pilule { flex: none; background: var(--creme); color: var(--noir); border: 3px solid var(--noir); box-shadow: 3px 3px 0 var(--noir);
     font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 0 10px; min-height: 42px; }
   .pilule[disabled] { opacity: .45; cursor: default; }
+  .pilule.carre { width: 42px; padding: 0; display: grid; place-items: center; }
+  .pilule.carre svg { width: 21px; height: 21px; }
+  /* Petits écrans : la loupe tient sur la ligne des vues */
+  @media (max-width: 389px) {
+    .ligne2 { gap: 6px; }
+    .vues button { padding: 8px 2px; letter-spacing: .01em; }
+    .pilule:not(.carre) { padding: 0 7px; letter-spacing: .01em; }
+  }
+  .txt-court { display: none; }
+  @media (max-width: 359px) { .txt-long { display: none; } .txt-court { display: inline; } }
 
   /* ---------- Feuille du calendrier ---------- */
   main.papier { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--papier); color: var(--encre);
@@ -445,6 +455,39 @@
   .rt-fini p { margin: 0; font-weight: 800; font-size: 16px; }
   .section-retard .titre-jour .lien { font-size: 13px; min-height: 0; padding: 0; text-transform: none; letter-spacing: 0; }
 
+  /* ---------- Loupe ---------- */
+  #loupe { height: 92vh; height: 92dvh; }
+  @media (min-width: 600px) { #loupe { height: min(720px, 92dvh); } }
+  .lp-haut { flex: none; display: flex; align-items: center; gap: 4px; padding: 10px 6px 10px 12px; border-bottom: 1px solid var(--ligne); margin: 0; }
+  .lp-champ { flex: 1; min-width: 0; position: relative; }
+  .lp-champ > svg { position: absolute; left: 11px; top: 50%; width: 18px; height: 18px; margin-top: -9px; color: var(--gris); pointer-events: none; }
+  .lp-champ input { width: 100%; min-height: 44px; font: inherit; font-size: 16px; font-weight: 600; border: 2px solid var(--trait); border-radius: 10px;
+    padding: 8px 40px 8px 36px; background: var(--champ); color: var(--encre); -webkit-appearance: none; appearance: none; }
+  .lp-champ input::-webkit-search-cancel-button, .lp-champ input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+  .lp-champ input::placeholder { color: var(--gris); opacity: 1; }
+  .lp-effacer { position: absolute; right: 4px; top: 50%; margin-top: -18px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: none; color: var(--gris); padding: 0; display: grid; place-items: center; }
+  .lp-effacer svg { width: 18px; height: 18px; }
+  .lp-filtres { flex: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--ligne); }
+  .filtre { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px 0 10px; border: 2px solid var(--trait); border-radius: 18px;
+    background: var(--champ); color: var(--encre); font-weight: 700; font-size: 13px; }
+  .filtre i { width: 11px; height: 11px; border-radius: 50%; background: var(--c); border: 2px solid var(--trait); flex: none; }
+  .filtre[aria-pressed="true"] { background: var(--encre); color: var(--papier); }
+  .filtre[aria-pressed="true"] i { border-color: var(--papier); }
+  .filtre[aria-pressed="true"]::before { content: "✓"; font-weight: 900; margin-right: -2px; }
+  .lp-resultats { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: calc(env(safe-area-inset-bottom) + 18px); }
+  .lp-resultats .ligne-occ .ouvrir { grid-template-columns: 92px 1fr; }
+  .lp-resultats .heures b { display: block; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lp-resultats .heures small { white-space: nowrap; }
+  .lp-resultats .titre-jour { z-index: 3; }
+  .lp-aide { padding: 26px 20px; text-align: center; color: var(--gris); font-size: 14px; line-height: 1.5; display: grid; gap: 10px; justify-items: center; }
+  .lp-aide p { margin: 0; }
+  .lp-plus { display: flex; margin: 12px auto 4px; }
+  mark { background: var(--or); color: var(--noir); border-radius: 3px; padding: 0 1px; }
+  .ligne-occ.fait .quoi b mark { color: var(--noir); }
+  /* Élément retrouvé : il clignote une fois dans le calendrier */
+  .repere { animation: repere 1.8s ease-out 1; }
+  @keyframes repere { 0%, 55% { box-shadow: 0 0 0 3px var(--rouge-fond), 0 0 0 6px var(--papier); } }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -494,6 +537,7 @@
       <fieldset id="ed-cat-zone"><legend>Catégorie</legend><div class="cats" id="ed-cats"></div></fieldset>
       <div class="groupe" id="ed-fait"><label class="rang"><span>Faite</span><span class="interrupteur"><input type="checkbox" name="fait" role="switch"><i></i></span></label></div>
       <p class="erreur" id="ed-erreur" role="alert"></p>
+      <button type="button" class="bouton clair" data-ed="voir" id="ed-voir" hidden>Voir dans le calendrier</button>
       <button type="button" class="bouton clair" data-ed="acaser" id="ed-acaser">À caser plus tard</button>
       <button type="button" class="supprimer" data-ed="supprimer" id="ed-supprimer">Supprimer</button>
     </div>
@@ -588,13 +632,30 @@
   </div>
   <div class="f-corps" id="b-corps"></div>
 </dialog>
+<dialog class="feuille" id="loupe" aria-labelledby="lp-titre">
+  <h2 class="masque" id="lp-titre">Chercher</h2>
+  <form class="lp-haut" role="search" id="form-loupe" novalidate>
+    <div class="lp-champ">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.3" fill="none" stroke="currentColor" stroke-width="2.8"/><path d="M15.4 15.4L20.5 20.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+      <label class="masque" for="lp-q">Chercher par titre ou par catégorie</label>
+      <input type="search" id="lp-q" name="q" maxlength="80" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"
+        placeholder="Dentiste, sport…" aria-controls="lp-resultats" aria-describedby="lp-compte">
+      <button type="button" class="lp-effacer" data-lp="effacer" aria-label="Effacer la recherche" hidden></button>
+    </div>
+    <button type="button" class="lien fort" data-lp="fermer">Fermer</button>
+  </form>
+  <div class="lp-filtres" id="lp-filtres" role="group" aria-label="Filtres"></div>
+  <p class="rt-msg" id="lp-msg" role="status" aria-live="polite"></p>
+  <p class="masque" id="lp-compte" aria-live="polite"></p>
+  <div class="lp-resultats" id="lp-resultats"></div>
+</dialog>
 <input type="file" id="fichier-import" accept="application/json,.json" hidden>
 
 <script>
 (() => {
   'use strict';
   const CLE = 'guts-cal-v1';
-  const VERSION = 22;
+  const VERSION = 23;
 
   // ---------- Réglages ----------
   const CONFIG = {
@@ -844,6 +905,8 @@
     coche: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>',
     reglages: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="10" cy="17" r="2.6" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>',
+    loupe: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.3" fill="none" stroke="currentColor" stroke-width="2.8"/><path d="M15.4 15.4L20.5 20.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>',
+    croix: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" style="stroke:var(--champ)" stroke-width="2.4" stroke-linecap="round"/></svg>',
     gauche: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     droite: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
@@ -994,7 +1057,8 @@
           ${[['jour', 'Jour'], ['semaine', 'Semaine'], ['mois', 'Mois'], ['liste', 'Liste']].map(([v, n]) =>
             `<button type="button" role="tab" aria-selected="${U.vue === v}" data-vue="${v}" data-focus="vue-${v}">${n}</button>`).join('')}
         </div>
-        <button type="button" class="pilule" data-action="aujourdhui" data-focus="auj" ${surAuj ? 'disabled' : ''}>Aujourd'hui</button>
+        <button type="button" class="pilule carre" data-action="chercher" aria-label="Chercher" aria-keyshortcuts="/" data-focus="chercher">${ICONE.loupe}</button>
+        <button type="button" class="pilule" data-action="aujourdhui" data-focus="auj" aria-label="Aujourd'hui" ${surAuj ? 'disabled' : ''}><span class="txt-long">Aujourd'hui</span><span class="txt-court">Auj</span></button>
       </div>`;
   }
   const libNav = s => ({ jour: s < 0 ? 'Jour précédent' : 'Jour suivant', semaine: s < 0 ? 'Semaine précédente' : 'Semaine suivante', mois: s < 0 ? 'Mois précédent' : 'Mois suivant' }[U.vue] || '');
@@ -1029,7 +1093,7 @@
     const avecCase = el.type === 'tache' && U.vue === 'jour';
     const etat = el.type === 'libre' ? etatLibre(o) : null;
     const paye = S.payes[o.cle] && S.payes[o.cle].pts;
-    return `<div class="bloc ${el.type}${etat === 'grignote' ? ' grignote' : ''}${o.fait ? ' fait' : ''}${court ? ' court' : ''}${choisi ? ' choisi' : ''}${g.n > 1 && U.vue === 'semaine' ? ' etroit' : ''}" data-cle="${o.cle}"
+    return `<div class="bloc ${el.type}${etat === 'grignote' ? ' grignote' : ''}${o.fait ? ' fait' : ''}${court ? ' court' : ''}${choisi ? ' choisi' : ''}${U.repere === o.cle ? ' repere' : ''}${g.n > 1 && U.vue === 'semaine' ? ' etroit' : ''}" data-cle="${o.cle}"
         style="top:${haut}px;height:${hauteur}px;left:calc(${g.col / g.n * 100}% + 2px);width:calc(${100 / g.n}% - 4px);${styleEl(el)}">
       <button type="button" class="b-ouvrir" data-ouvrir="${o.cle}" aria-label="${esc(description(o))}" data-focus="o${o.cle}"></button>
       ${avecCase ? caseTache(o) : ''}
@@ -1078,7 +1142,7 @@
   }
 
   function puce(o) {
-    return `<div class="puce${o.fait ? ' fait' : ''}" style="${styleEl(o.el)}">
+    return `<div class="puce${o.fait ? ' fait' : ''}${U.repere === o.cle ? ' repere' : ''}" style="${styleEl(o.el)}">
       ${o.el.type === 'tache' ? caseTache(o) : ''}
       <button type="button" class="ouvrir" data-ouvrir="${o.cle}" aria-label="${esc(description(o))}" data-focus="o${o.cle}">${esc(o.el.titre)}</button></div>`;
   }
@@ -1113,7 +1177,7 @@
           <span aria-hidden="true">${INITIALES[i]}</span><b aria-hidden="true">${parse(k).getDate()}</b></button>`).join('')}<span></span>
       </div>
       ${aEntieres ? `<div class="sem-journee"><span>jour</span>${entieres.map(e => `<div>${e.map(o =>
-        `<button type="button" class="mini-puce${o.fait ? ' fait' : ''}" style="${styleEl(o.el)}" data-ouvrir="${o.cle}" aria-label="${esc(description(o))}" data-focus="o${o.cle}">${esc(o.el.titre)}</button>`).join('')}</div>`).join('')}<span></span></div>` : ''}
+        `<button type="button" class="mini-puce${o.fait ? ' fait' : ''}${U.repere === o.cle ? ' repere' : ''}" style="${styleEl(o.el)}" data-ouvrir="${o.cle}" aria-label="${esc(description(o))}" data-focus="o${o.cle}">${esc(o.el.titre)}</button>`).join('')}</div>`).join('')}<span></span></div>` : ''}
       <div class="defile semaine" data-defile="semaine">${grille(jours)}</div>
       ${tiroir()}`;
   }
@@ -1125,7 +1189,7 @@
     const p = S.payes[o.cle];
     const details = (el.type === 'libre' ? ['Pour moi', ETAT_LIBRE[etatLibre(o)]] : [cat(el.cat).nom, el.type === 'evenement' ? 'Événement' : ''])
       .concat([el.rep ? REPET[el.rep.freq] : '', p && p.pts && el.type === 'tache' ? '+' + p.pts + ' pts' : '']).filter(Boolean).join(' · ');
-    return `<div class="ligne-occ${o.fait ? ' fait' : ''}" style="${styleEl(el)}">
+    return `<div class="ligne-occ${o.fait ? ' fait' : ''}${U.repere === o.cle ? ' repere' : ''}" style="${styleEl(el)}">
       <span class="marque">${el.type === 'tache' ? caseTache(o) : `<i aria-hidden="true"${el.type === 'libre' ? ' class="m-libre"' : ''}></i>`}</span>
       <button type="button" class="ouvrir" data-ouvrir="${o.cle}" aria-label="${esc(description(o))}" data-focus="o${o.cle}">${heures}
         <span class="quoi"><b>${esc(el.titre)}</b><small>${esc(details)}</small></span></button>
@@ -1296,11 +1360,19 @@
         d.scrollTop = Math.max(0, (sur ? Math.min(Math.floor(minNow() / 60) * 60 - 60, 16 * 60) : CONFIG.ouverture * 60) / 60 * H);
       }
     }
+    if (U.repere) {
+      const r = $('#vue .repere');
+      if (r) r.scrollIntoView({ block: 'center' });
+      U.repere = null;
+    }
     if (f) { const c = document.querySelector(`[data-focus="${CSS.escape(f)}"]`); if (c) c.focus({ preventScroll: true }); }
   }
 
   let minuteurToast;
   function dire(msg) {
+    // Loupe ouverte : le message s'affiche dans la feuille (un message bref serait caché dessous, puis réapparaîtrait à la fermeture)
+    const lp = document.getElementById('loupe');
+    if (lp && lp.open) { document.getElementById('lp-msg').textContent = msg; return; }
     const t = $('#toast');
     t.textContent = msg;
     t.classList.add('visible');
@@ -1375,7 +1447,7 @@
   // ---------- Éditeur ----------
   const ED = $('#editeur'), FORM = $('#form-ed');
   const champ = n => FORM.elements.namedItem(n);
-  function ouvrirEditeur(o, modele) {
+  function ouvrirEditeur(o, modele, opts) {
     U.edition = { o: o || null };
     const el = o ? o.el : null;
     const m = el ? { type: el.type, titre: el.titre, date: o.k, debut: el.debut, fin: el.fin, rep: el.rep, cat: el.cat, fait: o.fait }
@@ -1396,6 +1468,7 @@
     $('#ed-erreur').textContent = '';
     $('#ed-ok').textContent = o ? 'OK' : 'Ajouter';
     $('#ed-supprimer').hidden = !o;
+    $('#ed-voir').hidden = !(o && opts && opts.loupe);
     U.edition.peutCaser = !o || (!o.el.rep && !o.fait);
     majEditeur();
     ED.showModal();
@@ -1507,6 +1580,7 @@
     const b = e.target.closest('[data-ed]');
     if (!b) return;
     if (b.dataset.ed === 'annuler') { ED.close(); return; }
+    if (b.dataset.ed === 'voir') { const cle = U.edition.o.cle; ED.close(); LP.close(); montrerDansCalendrier(cle); return; }
     if (b.dataset.ed === 'acaser') {
       const r = lireFormulaire();
       if (r.erreur) { $('#ed-erreur').textContent = r.erreur; r.champ.focus(); return; }
@@ -1952,6 +2026,7 @@
     }
     if (d.action === 'aujourdhui') { U.recentrer = true; return allerA(aujourdhui()); }
     if (d.action === 'reglages') { renderReglages(); RG.showModal(); return; }
+    if (d.action === 'chercher') return ouvrirLoupe();
     if (d.action === 'guts') return ouvrirGuts();
     if (d.action === 'sauvegarder') return exporter().then(() => render());
     if (d.action === 'plus-tard') { S.rappelVu = aujourdhui(); sauver(); return render('plus'); }
@@ -1990,7 +2065,10 @@
     if (document.querySelector('dialog[open]')) return;
     if (e.key === 'Escape' && (U.selection || U.brouillon)) { U.selection = null; U.brouillon = null; render(); return; }
     const t = e.target;
-    if (t.closest && (t.closest('input, select, textarea, [role="tablist"]'))) return;
+    if (t.closest && t.closest('input, select, textarea')) return;
+    // « / » ou Ctrl+K (⌘K) : chercher
+    if ((e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) || ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K'))) { e.preventDefault(); ouvrirLoupe(); return; }
+    if (t.closest && t.closest('[role="tablist"]')) return;
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && U.vue !== 'liste' && !e.altKey && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       naviguer(e.key === 'ArrowLeft' ? -1 : 1);
@@ -2896,6 +2974,205 @@
       majCoffreUI(choix === 'effacer' ? 'Sauvegarde automatique arrêtée, copies effacées.' : 'Sauvegarde automatique arrêtée.', '[data-cf-ouvrir="nouveau"]');
     }
   });
+
+  // ---------- Loupe : chercher dans tout le calendrier ----------
+  // Par titre ou par catégorie, sans tenir compte des accents ni des majuscules. Un élément répété donne au plus
+  // deux lignes : sa prochaine fois (À venir) et sa dernière fois (Passé). La recherche reste en mémoire pendant la session.
+  const LP = $('#loupe'), LPQ = $('#lp-q');
+  U.loupe = { q: '', types: [], cats: [], max: {}, retour: null };
+  const PAR_PAGE = 50, HORIZON_LOUPE = 400;
+  const plier = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/œ/g, 'oe').replace(/æ/g, 'ae').replace(/[’ʼ]/g, "'");
+  const motsDe = q => plier(q).split(/\s+/).filter(Boolean).slice(0, 8);
+  // Titre échappé, mots cherchés surlignés
+  function surligner(texte, mots) {
+    const car = Array.from(texte), pos = [];
+    let plie = '';
+    car.forEach((c, i) => { const f = plier(c); for (let j = 0; j < f.length; j++) pos.push(i); plie += f; });
+    const marque = car.map(() => false);
+    mots.forEach(m => { for (let i = plie.indexOf(m); i >= 0; i = plie.indexOf(m, i + 1)) for (let j = i; j < i + m.length; j++) marque[pos[j]] = true; });
+    let h = '', dans = false;
+    car.forEach((c, i) => { if (marque[i] !== dans) { h += dans ? '</mark>' : '<mark>'; dans = marque[i]; } h += esc(c); });
+    return h + (dans ? '</mark>' : '');
+  }
+  const foinDe = (titre, type, catId) => plier(titre + ' ' + (type === 'libre' ? 'pour moi' : cat(catId).nom));
+  const filtresOk = (type, catId) => (!U.loupe.types.length || U.loupe.types.includes(type))
+    && (!U.loupe.cats.length || (type !== 'libre' && U.loupe.cats.includes(cat(catId).id)));
+  // Prochaine occurrence à partir de « depuis » (inclus), dernière avant « avant » (exclu)
+  function prochaine(el, depuis) {
+    if (!el.rep) return el.date >= depuis ? occ(el, el.date) : null;
+    let k = el.date > depuis ? el.date : depuis;
+    for (let i = 0; i < HORIZON_LOUPE; i++, k = decaler(k, 1)) {
+      if (el.rep.jusqua && k > el.rep.jusqua) return null;
+      if (tombe(el, k)) return occ(el, k);
+    }
+    return null;
+  }
+  function precedente(el, avant) {
+    if (!el.rep) return el.date < avant ? occ(el, el.date) : null;
+    let k = decaler(el.rep.jusqua && el.rep.jusqua < avant ? decaler(el.rep.jusqua, 1) : avant, -1);
+    for (let i = 0; i < HORIZON_LOUPE && k >= el.date; i++, k = decaler(k, -1)) if (tombe(el, k)) return occ(el, k);
+    return null;
+  }
+  // Une série coupée en deux (« celle-ci et les suivantes ») ne doit pas apparaître deux fois
+  function sansDoublon(liste) {
+    const vu = new Set();
+    return liste.filter(o => {
+      if (!o.el.rep) return true;
+      const c = plier(o.el.titre) + '|' + o.el.type + '|' + o.el.cat + '|' + o.el.rep.freq;
+      if (vu.has(c)) return false;
+      vu.add(c);
+      return true;
+    });
+  }
+  function chercher() {
+    const L = U.loupe, mots = motsDe(L.q), auj = aujourdhui();
+    if (!mots.length && !L.types.length && !L.cats.length) return null;
+    const avenir = [], passe = [];
+    S.elements.forEach(el => {
+      if (!filtresOk(el.type, el.cat)) return;
+      const foin = foinDe(el.titre, el.type, el.cat);
+      if (!mots.every(m => foin.includes(m))) return;
+      const a = prochaine(el, auj), p = precedente(el, auj);
+      if (a) avenir.push(a);
+      if (p) passe.push(p);
+    });
+    avenir.sort((a, b) => a.k.localeCompare(b.k) || ordre(a, b));
+    passe.sort((a, b) => b.k.localeCompare(a.k) || ordre(b, a));
+    const caser = S.acaser.filter(x => filtresOk('tache', x.cat) && mots.every(m => (foinDe(x.titre, 'tache', x.cat) + ' a caser').includes(m)));
+    return { mots, caser, avenir: sansDoublon(avenir), passe: sansDoublon(passe) };
+  }
+  const dateCourte = k => {
+    const auj = aujourdhui();
+    if (k === auj) return "Aujourd'hui";
+    if (k === decaler(auj, 1)) return 'Demain';
+    if (k === decaler(auj, -1)) return 'Hier';
+    return cap(fmt(k, k.slice(0, 4) === auj.slice(0, 4) ? { weekday: 'short', day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' }));
+  };
+  function ligneLoupe(o, mots) {
+    const el = o.el, p = S.payes[o.cle];
+    const pasFaite = el.type === 'tache' && !o.fait && o.k < aujourdhui();
+    const details = (el.type === 'libre' ? ['Pour moi', ETAT_LIBRE[etatLibre(o)]] : [cat(el.cat).nom, el.type === 'evenement' ? 'Événement' : ''])
+      .concat([el.rep ? REPET[el.rep.freq] : '', pasFaite ? 'pas faite' : '', p && p.pts && el.type === 'tache' ? '+' + p.pts + ' pts' : '']).filter(Boolean).join(' · ');
+    const jourLong = cap(fmt(o.k, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
+    const marque = el.type === 'tache'
+      ? `<button type="button" class="case" role="checkbox" aria-checked="${o.fait}" data-lp-cocher="${o.cle}" data-focus="lc${o.cle}"
+          aria-label="${esc(el.titre)}, ${esc(jourLong)} : ${o.fait ? 'faite' : 'à faire'}">${ICONE.coche}</button>`
+      : `<i aria-hidden="true"${el.type === 'libre' ? ' class="m-libre"' : ''}></i>`;
+    return `<div class="ligne-occ${o.fait ? ' fait' : ''}" style="${styleEl(el)}" role="listitem">
+      <span class="marque">${marque}</span>
+      <button type="button" class="ouvrir" data-lp-ouvrir="${o.cle}" data-focus="lo${o.cle}" aria-label="${esc(jourLong)}, ${esc(description(o))}${pasFaite ? ', pas faite' : ''}">
+        <span class="heures"><b>${esc(dateCourte(o.k))}</b><small>${el.debut == null ? 'Journée' : hhmm(el.debut) + ' – ' + hhmm(el.fin)}</small></span>
+        <span class="quoi"><b>${surligner(el.titre, mots)}</b><small>${esc(details)}</small></span></button>
+    </div>`;
+  }
+  const ligneCaserLoupe = (x, mots) => `<div class="ligne-occ" style="${styleCat(x.cat)}" role="listitem">
+      <span class="marque"><i aria-hidden="true"></i></span>
+      <button type="button" class="ouvrir" data-lp-caser="${x.id}" data-focus="lk${x.id}" aria-label="${esc(x.titre)}, ${dureeTexte(x.duree)}, ${esc(cat(x.cat).nom)}, à caser : ouvrir">
+        <span class="heures"><b>À caser</b><small>${dureeTexte(x.duree)}</small></span>
+        <span class="quoi"><b>${surligner(x.titre, mots)}</b><small>${esc(cat(x.cat).nom)}</small></span></button>
+    </div>`;
+  let minuteurCompte;
+  // garder : rester au même endroit de la liste (après avoir coché, modifié…) ; sinon on revient en haut
+  function renderLoupe(focus, garder) {
+    const L = U.loupe;
+    L.cats = L.cats.filter(id => S.categories.some(c => c.id === id));
+    $('#lp-filtres').innerHTML = [['tache', 'Tâches'], ['evenement', 'Événements'], ['libre', 'Pour moi']]
+      .map(([t, n]) => `<button type="button" class="filtre" data-lp-type="${t}" aria-pressed="${L.types.includes(t)}" data-focus="lt${t}">${n}</button>`).join('')
+      + S.categories.map(c => `<button type="button" class="filtre" style="--c:${c.couleur}" data-lp-cat="${esc(c.id)}" aria-pressed="${L.cats.includes(c.id)}" data-focus="lf${esc(c.id)}"><i aria-hidden="true"></i>${esc(c.nom)}</button>`).join('');
+    $('.lp-effacer').hidden = !L.q;
+    const r = chercher(), filtres = L.types.length + L.cats.length;
+    const n = r ? r.caser.length + r.avenir.length + r.passe.length : 0;
+    const section = (id, nom, liste, ligne) => {
+      if (!liste.length) return '';
+      const max = L.max[id] || PAR_PAGE;
+      return `<section data-section="${id}" aria-label="${nom}"><h3 class="titre-jour"><span>${nom}</span> <small>${liste.length}</small></h3>
+        <div role="list">${liste.slice(0, max).map(x => ligne(x, r.mots)).join('')}</div>
+        ${liste.length > max ? `<button type="button" class="bouton clair lp-plus" data-lp-plus="${id}" data-focus="lp${id}">Afficher ${Math.min(PAR_PAGE, liste.length - max)} de plus</button>` : ''}</section>`;
+    };
+    const zone = $('#lp-resultats'), haut = zone.scrollTop;
+    zone.innerHTML = !r ? `<div class="lp-aide"><p>Cherche une tâche, un événement ou un temps pour moi par son titre ou sa catégorie.</p><p>Les filtres se combinent avec la recherche : touche « Sport » pour tout voir de cette catégorie.</p></div>`
+      : n ? section('caser', 'À caser', r.caser, ligneCaserLoupe) + section('avenir', 'À venir', r.avenir, ligneLoupe) + section('passe', 'Passé', r.passe, ligneLoupe)
+      : `<div class="lp-aide"><p>${L.q.trim() ? `Rien ne correspond à « ${esc(L.q.trim())} »` : 'Rien ne correspond'}${filtres ? ' avec ces filtres' : ''}.</p>
+          ${filtres ? '<button type="button" class="bouton clair" data-lp="tout" data-focus="lp-tout">Retirer les filtres</button>' : ''}</div>`;
+    zone.scrollTop = garder ? haut : 0;
+    // Le nombre de résultats est annoncé quand on a fini de taper
+    clearTimeout(minuteurCompte);
+    minuteurCompte = setTimeout(() => { $('#lp-compte').textContent = !r ? '' : n ? `${n} résultat${n > 1 ? 's' : ''}` : 'Aucun résultat'; }, 700);
+    if (focus) {
+      const c = LP.querySelector(`[data-focus="${CSS.escape(focus)}"]`) || LP.querySelector('[data-lp-ouvrir], [data-lp-caser]') || LPQ;
+      c.focus({ preventScroll: garder });
+    }
+  }
+  function ouvrirLoupe() {
+    if (LP.open) return;
+    $('#lp-msg').textContent = '';
+    $('#lp-compte').textContent = '';
+    LPQ.value = U.loupe.q;
+    renderLoupe();
+    LP.showModal();
+    LPQ.focus();
+    if (LPQ.value) LPQ.select();
+  }
+  // Montre une occurrence dans le calendrier : son jour (vue Jour depuis la Liste), elle clignote une fois
+  function montrerDansCalendrier(cle) {
+    const o = trouver(cle);
+    if (!o) return;
+    const vue = U.vue === 'liste' ? 'jour' : U.vue;
+    U.date = o.k; U.selection = null; U.brouillon = null;
+    if (vue !== U.vue) { U.vue = vue; S.vue = vue; sauver(); }
+    U.repere = cle;
+    render('o' + cle);
+  }
+  const basculerDans = (liste, v) => { const i = liste.indexOf(v); if (i < 0) liste.push(v); else liste.splice(i, 1); };
+  LPQ.addEventListener('input', () => { U.loupe.q = LPQ.value; U.loupe.max = {}; $('#lp-msg').textContent = ''; renderLoupe(); });
+  // Touche « Rechercher » du clavier de l'iPhone : le clavier se range, les résultats restent
+  $('#form-loupe').addEventListener('submit', e => { e.preventDefault(); LPQ.blur(); });
+  // Échap : efface d'abord la recherche, puis ferme
+  LPQ.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && LPQ.value) { e.preventDefault(); e.stopPropagation(); LPQ.value = ''; U.loupe.q = ''; renderLoupe(); }
+  });
+  // Faire défiler les résultats range le clavier (sinon la fin de la liste resterait dessous)
+  $('#lp-resultats').addEventListener('touchmove', () => { if (document.activeElement === LPQ) LPQ.blur(); }, { passive: true });
+  LP.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const d = b.dataset;
+    if (d.lp === 'fermer') { LP.close(); return; }
+    if (d.lp === 'effacer') { LPQ.value = ''; U.loupe.q = ''; U.loupe.max = {}; renderLoupe(); LPQ.focus(); return; }
+    if (d.lp === 'tout') { U.loupe.types = []; U.loupe.cats = []; U.loupe.max = {}; renderLoupe(); LPQ.focus(); return; }
+    if (d.lpType) { basculerDans(U.loupe.types, d.lpType); U.loupe.max = {}; renderLoupe('lt' + d.lpType); return; }
+    if (d.lpCat) { basculerDans(U.loupe.cats, d.lpCat); U.loupe.max = {}; renderLoupe('lf' + d.lpCat); return; }
+    if (d.lpPlus) {
+      const avant = U.loupe.max[d.lpPlus] || PAR_PAGE;
+      U.loupe.max[d.lpPlus] = avant + PAR_PAGE;
+      renderLoupe(null, true);
+      const l = LP.querySelectorAll(`[data-section="${d.lpPlus}"] .ouvrir`)[avant];
+      if (l) l.focus();
+      return;
+    }
+    if (d.lpCocher) {
+      const o = trouver(d.lpCocher);
+      if (!o || o.el.type !== 'tache') return;
+      let msg = basculer(o);
+      if (U.grandi) { msg += ` Guts grandit : ${U.grandi.nom} !`; U.grandi = null; }
+      sauver();
+      render();
+      $('#lp-msg').textContent = msg;
+      renderLoupe('lc' + o.cle, true);
+      return;
+    }
+    if (d.lpOuvrir) {
+      const o = trouver(d.lpOuvrir);
+      if (!o) return;
+      U.loupe.retour = 'lo' + o.cle;
+      ouvrirEditeur(o, null, { loupe: true });
+      return;
+    }
+    if (d.lpCaser) { U.loupe.retour = 'lk' + d.lpCaser; ouvrirCaser(d.lpCaser); }
+  });
+  // Retour de la fiche (modifiée, supprimée, cochée…) : les résultats se mettent à jour, au même endroit
+  [ED, CD].forEach(f => f.addEventListener('close', () => { if (LP.open) renderLoupe(U.loupe.retour, true); }));
+  $('.lp-effacer').innerHTML = ICONE.croix;
 
   // ---------- Thème clair ou sombre ----------
   const SOMBRE = window.matchMedia('(prefers-color-scheme: dark)');
