@@ -7,6 +7,8 @@ Calendrier personnel avec Guts, un renard qui grandit avec les tâches tenues et
 - Les données restent sur l'appareil (stockage du navigateur). Réglages › Sauvegarde : copie automatique chiffrée sur l'appareil
   avant l'envoi (AES-GCM, clé tirée d'un code de récupération qui ne quitte pas l'appareil ; le service ne garde que 7 jours
   de copies illisibles), ou export dans un fichier.
+- Réglages › Verrou Face ID : une clé d'accès (WebAuthn) propre à Guts, demandée à l'ouverture et au retour après le délai choisi.
+  Réglages du verrou gardés sur l'appareil seulement (`guts-verrou`), hors des données.
 
 ## Fichiers
 

@@ -484,6 +484,24 @@
   .lp-plus { display: flex; margin: 12px auto 4px; }
   mark { background: var(--or); color: var(--noir); border-radius: 3px; padding: 0 1px; }
   .ligne-occ.fait .quoi b mark { color: var(--noir); }
+  /* ---------- Verrou Face ID : écran plein, toujours aux couleurs de nuit de Guts ---------- */
+  dialog#verrou { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; padding: 0; box-shadow: none;
+    background: var(--bg); color: var(--creme); background-image: repeating-linear-gradient(-45deg, transparent 0 22px, rgba(79,124,255,.08) 22px 24px); }
+  dialog#verrou[open] { display: grid; place-items: center; }
+  dialog#verrou::backdrop { background: var(--bg); }
+  #verrou :focus-visible { outline-color: var(--cyan); }
+  .vr-corps { display: grid; gap: 14px; justify-items: center; text-align: center; width: 100%; max-width: 380px; padding: 24px 24px calc(env(safe-area-inset-bottom) + 24px); }
+  .vr-corps .grand-renard { height: 170px; }
+  .vr-corps .grand-renard .fox { width: 164px; height: 164px; }
+  .vr-corps h2 { margin: 0; font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: -.01em; }
+  .vr-corps p { margin: 0; color: var(--doux); font-size: 15px; line-height: 1.45; }
+  .vr-corps .bouton { width: 100%; min-height: 54px; font-size: 14px; }
+  .vr-corps .bouton svg { width: 22px; height: 22px; }
+  .vr-corps .bouton.clair { min-height: 48px; }
+  .vr-corps .erreur { color: #ff8590; }
+  .vr-corps .lien-discret { color: var(--doux); margin: 0; }
+  .vr-aide { display: grid; gap: 10px; width: 100%; }
+
   /* Élément retrouvé : il clignote une fois dans le calendrier */
   .repere { animation: repere 1.8s ease-out 1; }
   @keyframes repere { 0%, 55% { box-shadow: 0 0 0 3px var(--rouge-fond), 0 0 0 6px var(--papier); } }
@@ -649,13 +667,27 @@
   <p class="masque" id="lp-compte" aria-live="polite"></p>
   <div class="lp-resultats" id="lp-resultats"></div>
 </dialog>
+<dialog id="verrou" aria-labelledby="vr-titre" aria-describedby="vr-texte">
+  <div class="vr-corps">
+    <div class="grand-renard" id="vr-renard" aria-hidden="true"></div>
+    <h2 id="vr-titre">Guts est verrouillé</h2>
+    <p id="vr-texte">Guts garde ton calendrier.</p>
+    <button type="button" class="bouton" data-vr="ouvrir" id="vr-ouvrir"></button>
+    <p class="erreur" id="vr-erreur" role="alert"></p>
+    <button type="button" class="lien-discret" data-vr="aide" id="vr-lien-aide" aria-expanded="false" aria-controls="vr-aide"></button>
+    <div class="vr-aide" id="vr-aide" hidden>
+      <p id="vr-aide-texte"></p>
+      <button type="button" class="bouton clair" data-vr="nouvelle">Créer une nouvelle clé</button>
+    </div>
+  </div>
+</dialog>
 <input type="file" id="fichier-import" accept="application/json,.json" hidden>
 
 <script>
 (() => {
   'use strict';
   const CLE = 'guts-cal-v1';
-  const VERSION = 23;
+  const VERSION = 24;
 
   // ---------- Réglages ----------
   const CONFIG = {
@@ -1771,6 +1803,7 @@
   const RG = $('#reglages');
   function renderReglages() {
     setTimeout(preparerRappels, 0);
+    setTimeout(preparerVerrou, 0);
     $('#r-corps').innerHTML = `
       <fieldset><legend>Catégories</legend>
         <div class="groupe">
@@ -1790,6 +1823,7 @@
         </div>
         <p class="note" style="margin-top:8px">Automatique suit le réglage clair ou sombre de ton téléphone.</p>
       </fieldset>
+      <fieldset id="r-verrou">${htmlVerrou()}</fieldset>
       <fieldset id="r-rappels">${htmlRappels()}</fieldset>
       <fieldset id="r-coffre">${htmlCoffre()}</fieldset>
       <p class="version">Guts v${VERSION}</p>`;
@@ -3329,6 +3363,181 @@
   [ED, CD].forEach(f => f.addEventListener('close', () => { if (LP.open) renderLoupe(U.loupe.retour, true); }));
   $('.lp-effacer').innerHTML = ICONE.croix;
 
+  // ---------- Verrou Face ID ----------
+  // Une clé d'accès (passkey) propre à Guts, rangée dans le trousseau de l'iPhone. Guts la demande à l'ouverture et au retour
+  // après le délai choisi : Face ID, ou le code de l'iPhone si Face ID échoue. Les réglages du verrou restent sur l'appareil
+  // (hors des données : ni exportés, ni sauvegardés). Ce verrou cache l'app ; il ne chiffre pas les données du téléphone.
+  const CLE_VERROU = 'guts-verrou';
+  const VR = $('#verrou');
+  const DELAIS_VERROU = [[0, 'Dès que je quitte Guts'], [1, 'Après 1 min'], [5, 'Après 5 min'], [15, 'Après 15 min'], [60, 'Après 1 h']];
+  const BIO = IOS ? 'Face ID' : 'le déverrouillage de l\'appareil';
+  const V = { conf: { actif: false, id: null, uid: null, delai: 5 }, etat: 'ouvert', quitteLe: null, abort: null, pause: false, dispo: undefined };
+  try { Object.assign(V.conf, JSON.parse(localStorage.getItem(CLE_VERROU)) || {}); } catch (e) { /* pas de verrou */ }
+  if (!V.conf.id) V.conf.actif = false;
+  const garderVerrou = () => { try { localStorage.setItem(CLE_VERROU, JSON.stringify(V.conf)); } catch (e) { /* stockage plein */ } };
+  const enB64u = u8 => { let t = ''; u8.forEach(o => { t += String.fromCharCode(o); }); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const deB64u = t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4)), c => c.charCodeAt(0));
+  const ICONE_VISAGE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5.5A2.5 2.5 0 0 1 5.5 3H8M16 3h2.5A2.5 2.5 0 0 1 21 5.5V8M21 16v2.5a2.5 2.5 0 0 1-2.5 2.5H16M8 21H5.5A2.5 2.5 0 0 1 3 18.5V16"/><path d="M9 9.5v1M15 9.5v1M12.2 9.5v3.3h-1M9.3 15.6c1.5 1.2 3.9 1.2 5.4 0"/></svg>';
+  async function preparerVerrou() {
+    if (V.dispo === undefined) {
+      let ok = false;
+      try { ok = !!(window.isSecureContext && window.PublicKeyCredential && navigator.credentials && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch (e) { ok = false; }
+      V.dispo = ok;
+    }
+    majVerrouUI();
+  }
+  // Les requêtes WebAuthn partent sans attente avant l'appel : Safari les veut au plus près du toucher
+  async function creerCle() {
+    const uid = V.conf.uid ? deB64u(V.conf.uid) : crypto.getRandomValues(new Uint8Array(16));
+    const defi = crypto.getRandomValues(new Uint8Array(32));
+    V.pause = true;
+    try {
+      const c = await navigator.credentials.create({ publicKey: {
+        rp: { name: 'Guts' },
+        user: { id: uid, name: 'Guts', displayName: 'Guts' },
+        challenge: defi,
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred', requireResidentKey: false },
+        timeout: 120000, attestation: 'none' } });
+      const cd = JSON.parse(new TextDecoder().decode(c.response.clientDataJSON));
+      if (cd.type !== 'webauthn.create' || cd.challenge !== enB64u(defi) || cd.origin !== location.origin) throw new Error('reponse');
+      if (c.response.getAuthenticatorData && !(new Uint8Array(c.response.getAuthenticatorData())[32] & 0x04)) throw new Error('reponse');
+      const ancien = V.conf.id, nouveau = enB64u(new Uint8Array(c.rawId));
+      Object.assign(V.conf, { actif: true, id: nouveau, uid: enB64u(uid), creeLe: Date.now() });
+      garderVerrou();
+      if (ancien && ancien !== nouveau) oublierCle(ancien);
+    } finally { V.pause = false; }
+  }
+  // Demande au trousseau d'oublier une clé dont Guts ne se sert plus (si le système le permet)
+  function oublierCle(id) {
+    try { if (PublicKeyCredential.signalUnknownCredential) PublicKeyCredential.signalUnknownCredential({ rpId: location.hostname, credentialId: id }).catch(() => {}); } catch (e) { /* facultatif */ }
+  }
+  // Face ID : 'ok', 'echec' (refusé, annulé, clé introuvable) ou 'remplace' (une autre demande a pris le relais)
+  async function demanderFaceID() {
+    if (V.abort) V.abort.abort();
+    const ctrl = V.abort = new AbortController();
+    const defi = crypto.getRandomValues(new Uint8Array(32));
+    V.pause = true;
+    try {
+      const a = await navigator.credentials.get({ publicKey: {
+        challenge: defi, allowCredentials: [{ type: 'public-key', id: deB64u(V.conf.id), transports: ['internal'] }],
+        userVerification: 'required', timeout: 120000 }, signal: ctrl.signal });
+      if (ctrl !== V.abort) return 'remplace';
+      const ad = new Uint8Array(a.response.authenticatorData);
+      const cd = JSON.parse(new TextDecoder().decode(a.response.clientDataJSON));
+      const bon = (ad[32] & 0x05) === 0x05 && cd.type === 'webauthn.get' && cd.challenge === enB64u(defi) && cd.origin === location.origin && enB64u(new Uint8Array(a.rawId)) === V.conf.id;
+      return bon ? 'ok' : 'echec';
+    } catch (e) {
+      return ctrl !== V.abort ? 'remplace' : 'echec';
+    } finally {
+      if (ctrl === V.abort) { V.abort = null; V.pause = false; }
+    }
+  }
+  const texteCreation = e => e && e.name === 'NotAllowedError' ? 'Activation annulée.' : e && e.name === 'SecurityError' ? 'Le verrou ne marche que depuis l\'adresse de Guts (https).' : 'Impossible de créer la clé sur cet appareil.';
+  function majEcranVerrou() {
+    $('#vr-renard').innerHTML = renard(stade().id, 'determinee');
+    $('#vr-ouvrir').innerHTML = `${IOS ? ICONE_VISAGE + ' Déverrouiller avec Face ID' : 'Déverrouiller'}`;
+    $('#vr-lien-aide').textContent = IOS ? 'Face ID ne marche plus ?' : 'Le déverrouillage ne marche plus ?';
+    $('#vr-aide-texte').textContent = `Si la clé de Guts a été supprimée du trousseau, crée-en une nouvelle. ${IOS ? "L'iPhone te demandera Face ID ou ton code." : "L'appareil te demandera ton empreinte, ton visage ou ton code."}`;
+  }
+  function montrerVerrou(etat) {
+    V.etat = etat;
+    majEcranVerrou();
+    $('#vr-erreur').textContent = '';
+    $('#vr-aide').hidden = true;
+    $('#vr-lien-aide').setAttribute('aria-expanded', 'false');
+    if (!VR.open) VR.showModal();
+  }
+  function verrouiller(auto) {
+    montrerVerrou('verrouille');
+    if (auto) essayerDeverrouiller(true);
+  }
+  // auto : demandé à l'ouverture ou au retour (un échec ne s'affiche pas : le bouton reste là)
+  function essayerDeverrouiller(auto) {
+    demanderFaceID().then(r => {
+      if (r === 'ok') return deverrouiller();
+      if (r === 'echec' && !auto && VR.open) $('#vr-erreur').textContent = `${IOS ? 'Face ID n\'a' : 'Le déverrouillage n\'a'} pas abouti. Réessaie.`;
+    });
+  }
+  function deverrouiller(msg) {
+    V.etat = 'ouvert';
+    if (VR.open) VR.close();
+    if (!document.querySelector('dialog[open]')) { render(); if (msg) dire(msg); if (!montrerBilan()) montrerRetard(); }
+    else if (msg) dire(msg);
+  }
+  VR.addEventListener('cancel', e => e.preventDefault());                       // Échap ne lève pas le verrou
+  VR.addEventListener('close', () => { if (V.etat !== 'ouvert') VR.showModal(); });
+  VR.addEventListener('click', e => {
+    const b = e.target.closest('[data-vr]');
+    if (!b) return;
+    const a = b.dataset.vr;
+    if (a === 'ouvrir') essayerDeverrouiller(false);
+    if (a === 'aide') {
+      const ouvert = $('#vr-aide').hidden;
+      $('#vr-aide').hidden = !ouvert;
+      b.setAttribute('aria-expanded', String(ouvert));
+    }
+    if (a === 'nouvelle') {
+      creerCle().then(() => deverrouiller('Nouvelle clé créée : le verrou est de nouveau prêt.'))
+        .catch(err => { $('#vr-erreur').textContent = texteCreation(err); });
+    }
+  });
+  // Quitter Guts : l'écran se voile (l'aperçu des apps ne montre rien) ; au retour, Face ID si le délai est passé
+  document.addEventListener('visibilitychange', () => {
+    if (!V.conf.actif || V.pause) return;
+    if (document.hidden) {
+      if (V.etat === 'ouvert') { V.quitteLe = Date.now(); montrerVerrou('voile'); }
+      return;
+    }
+    if (V.etat !== 'voile') return;
+    if (Date.now() - (V.quitteLe || 0) >= V.conf.delai * 60000) verrouiller(true);
+    else deverrouiller();
+  });
+  // Réglages › Verrou
+  function htmlVerrou(msg) {
+    let h = `<legend>${IOS ? 'Verrou Face ID' : 'Verrou'}</legend>`;
+    if (V.dispo === false && !V.conf.actif) return h + `<p class="note">${IOS ? "Face ID n'est pas disponible ici : il faut iOS 16 ou plus récent, avec Face ID ou un code configuré." : 'Cet appareil ne propose pas de déverrouillage (empreinte, visage ou code) aux sites web.'}</p>`;
+    if (!V.conf.actif) return h + `<p class="note" role="status">${esc(msg || `Guts te demande ${IOS ? 'Face ID' : 'ton empreinte, ton visage ou ton code'} à l'ouverture, et au retour après quelques minutes ailleurs. Si ça échoue, ${IOS ? "l'iPhone propose ton code" : "l'appareil propose son code"}.`)}</p>
+      <div class="actions" style="margin-top:10px"><button type="button" class="bouton" data-vr-action="activer"${V.dispo === undefined ? ' disabled' : ''}>Activer le verrou${IOS ? ' Face ID' : ''}</button></div>`;
+    return h + `<div class="groupe"><label class="rang"><span>Verrouiller</span><select data-vr-delai>${DELAIS_VERROU.map(([m, n]) => `<option value="${m}"${m === V.conf.delai ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>
+      <p class="note" role="status" style="margin-top:8px"><b>${esc(msg || `Verrou actif : ${BIO} à l'ouverture.`)}</b></p>
+      <div class="actions" style="margin-top:8px"><button type="button" class="bouton clair" data-vr-action="maintenant">Verrouiller maintenant</button>
+        <button type="button" class="lien fort" data-vr-action="desactiver" style="justify-self:auto">Désactiver</button></div>`;
+  }
+  function majVerrouUI(msg, focus) {
+    const f = document.getElementById('r-verrou');
+    if (!f || !RG.open) return;
+    const a = document.activeElement && f.contains(document.activeElement) ? document.activeElement : null;
+    const sel = a && (a.dataset.vrAction ? `[data-vr-action="${a.dataset.vrAction}"]` : a.hasAttribute('data-vr-delai') ? '[data-vr-delai]' : null);
+    f.innerHTML = htmlVerrou(msg);
+    const c = (focus && f.querySelector(focus)) || (sel && f.querySelector(sel));
+    if (c) c.focus();
+  }
+  RG.addEventListener('click', e => {
+    const b = e.target.closest('[data-vr-action]');
+    if (!b || b.disabled) return;
+    const a = b.dataset.vrAction;
+    if (a === 'activer') {
+      creerCle().then(() => majVerrouUI(`Verrou activé. ${BIO === 'Face ID' ? 'Face ID sera demandé' : 'Le déverrouillage sera demandé'} à la prochaine ouverture.`, '[data-vr-delai]'))
+        .catch(err => majVerrouUI(texteCreation(err), '[data-vr-action="activer"]'));
+    }
+    if (a === 'maintenant') { RG.close(); verrouiller(false); }
+    if (a === 'desactiver') {
+      demanderFaceID().then(r => {
+        if (r !== 'ok') return majVerrouUI(`${IOS ? 'Face ID n\'a' : 'Le déverrouillage n\'a'} pas abouti : le verrou reste actif.`, '[data-vr-action="desactiver"]');
+        oublierCle(V.conf.id);
+        Object.assign(V.conf, { actif: false, id: null });
+        garderVerrou();
+        majVerrouUI('Verrou désactivé.', '[data-vr-action="activer"]');
+      });
+    }
+  });
+  RG.addEventListener('change', e => {
+    if (!e.target.hasAttribute('data-vr-delai')) return;
+    V.conf.delai = Number(e.target.value);
+    garderVerrou();
+  });
+
   // ---------- Thème clair ou sombre ----------
   const SOMBRE = window.matchMedia('(prefers-color-scheme: dark)');
   function appliquerTheme() {
@@ -3376,6 +3585,7 @@
   crediter();
   U.reaction = false; U.grandi = null;
   U.humeur = humeur();
+  if (V.conf.actif) verrouiller(true);
   render();
   if (!montrerBilan()) montrerRetard();
   synchroniser();
