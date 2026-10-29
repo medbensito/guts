@@ -23,6 +23,7 @@
     --gouttiere: 46px;      /* colonne des heures */
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--creme); overscroll-behavior: none; -webkit-tap-highlight-color: transparent;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
@@ -64,7 +65,9 @@
 
   /* ---------- Feuille du calendrier ---------- */
   main.papier { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--papier); color: var(--noir);
-    border-top: 3px solid var(--noir); position: relative; touch-action: pan-y; }
+    border-top: 3px solid var(--noir); position: relative; }
+  /* Balayage horizontal possible sur la grille et les listes (la page ne défile que verticalement) */
+  .defile, .bande, .sem-tete, .sem-journee, .jour-titre, .journee { touch-action: pan-y; }
   @media (min-width: 700px) { main.papier { border: 3px solid var(--noir); margin: 0 14px 14px; box-shadow: 6px 6px 0 var(--noir); } }
   .defile { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; overscroll-behavior: contain; }
 
@@ -201,10 +204,38 @@
     background: var(--rouge-fond); color: var(--creme); border: 3px solid var(--noir); box-shadow: 4px 4px 0 var(--noir); display: grid; place-items: center; padding: 0; }
   .plus svg { width: 26px; height: 26px; }
   .plus:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--noir); }
+
+  /* ---------- Tiroir « À caser » (vues Jour et Semaine) ---------- */
+  .tiroir { flex: none; position: relative; z-index: 6; background: var(--creme); border-top: 3px solid var(--noir); padding-bottom: env(safe-area-inset-bottom); }
+  .tiroir .plus { bottom: auto; top: -33px; }
+  .tiroir.ouvert .plus { top: -70px; }      /* tiroir ouvert : le + passe au-dessus, loin du champ de saisie */
+  .tiroir-barre { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 46px; border: 0; background: none; padding: 0 92px 0 14px; color: var(--noir);
+    font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; text-align: left; }
+  .tiroir-barre b { min-width: 24px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--noir); color: var(--creme); display: grid; place-items: center; font-size: 12px; }
+  .tiroir-barre i { font-style: normal; font-size: 11px; transition: transform .15s; }
+  .tiroir.ouvert .tiroir-barre i { transform: rotate(180deg); }
+  .tiroir-contenu { padding: 10px 0 2px; border-bottom: 1px solid var(--ligne-forte); }
+  .ajout-rapide { display: flex; gap: 8px; padding: 0 14px 0 14px; }
+  .ajout-rapide input { flex: 1; min-width: 0; font: inherit; font-size: 16px; font-weight: 600; border: 2px solid var(--noir); border-radius: 10px; padding: 8px 10px; background: #fff; color: var(--noir); }
+  .ajout-rapide .bouton { min-height: 40px; padding: 0 12px; font-size: 11px; box-shadow: 2px 2px 0 var(--noir); }
+  .caser-liste { display: flex; gap: 8px; overflow-x: auto; padding: 10px 14px 10px; touch-action: pan-x; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .caser-liste::-webkit-scrollbar { display: none; }
+  .puce-caser { flex: none; max-width: 190px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px 7px 9px; border: 2px solid var(--noir);
+    border-left: 5px solid var(--c); border-radius: 8px; background: var(--fond); color: var(--noir); text-align: left; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .puce-caser b { font-size: 13px; font-weight: 700; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .puce-caser small { font-size: 11px; color: #43475e; font-weight: 600; }
+  .puce-caser.prise { opacity: .35; }
+  .tiroir .note { padding: 0 14px 10px; font-size: 12px; }
+  .fantome { position: fixed; z-index: 60; pointer-events: none; padding: 7px 10px; border: 2px solid var(--noir); border-left: 5px solid var(--c); border-radius: 8px;
+    background: var(--fond); color: var(--noir); font-size: 13px; font-weight: 700; box-shadow: 4px 4px 0 var(--noir); transform: translate(-50%, -120%); white-space: nowrap; }
+  .fantome.cache { display: none; }
+  .ligne-occ .bouton.petit { min-height: 36px; padding: 0 10px; font-size: 11px; box-shadow: 2px 2px 0 var(--noir); flex: none; }
+  .section-caser { border-bottom: 3px solid var(--noir); }
+  .section-caser .ajout-rapide { padding: 10px 14px; }
   .bas-espace { height: calc(env(safe-area-inset-bottom) + 84px); }
 
   /* Message bref */
-  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 90px); transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
+  .toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 12px); transform: translateX(-50%) translateY(-16px); opacity: 0; pointer-events: none;
     background: var(--noir); color: var(--creme); border: 2px solid var(--creme); padding: 10px 14px; font-size: 14px; font-weight: 700; max-width: calc(100% - 32px);
     transition: opacity .2s, transform .2s; z-index: 50; text-align: center; }
   .toast.visible { opacity: 1; transform: translateX(-50%); }
@@ -372,6 +403,7 @@
       <fieldset id="ed-cat-zone"><legend>Catégorie</legend><div class="cats" id="ed-cats"></div></fieldset>
       <div class="groupe" id="ed-fait"><label class="rang"><span>Faite</span><span class="interrupteur"><input type="checkbox" name="fait" role="switch"><i></i></span></label></div>
       <p class="erreur" id="ed-erreur" role="alert"></p>
+      <button type="button" class="bouton clair" data-ed="acaser" id="ed-acaser">À caser plus tard</button>
       <button type="button" class="supprimer" data-ed="supprimer" id="ed-supprimer">Supprimer</button>
     </div>
   </form>
@@ -391,6 +423,34 @@
   </div>
   <div class="f-corps" id="r-corps"></div>
 </dialog>
+<dialog class="feuille" id="caser" aria-labelledby="c-titre">
+  <form id="form-caser" novalidate>
+    <div class="f-haut">
+      <button type="button" class="lien" data-c="annuler">Annuler</button>
+      <h2 id="c-titre">À caser</h2>
+      <button type="submit" class="lien fort">OK</button>
+    </div>
+    <div class="f-corps">
+      <label class="masque" for="c-nom">Titre</label>
+      <input class="champ-titre" id="c-nom" name="nom" maxlength="120" autocomplete="off" enterkeyhint="done" placeholder="Titre">
+      <div class="groupe">
+        <label class="rang"><span>Durée</span><select name="cduree"></select></label>
+      </div>
+      <fieldset><legend>Catégorie</legend><div class="cats" id="c-cats"></div></fieldset>
+      <fieldset><legend>La caser</legend>
+        <button type="button" class="bouton" data-c="auto" id="c-auto" style="width:100%"></button>
+        <div class="groupe" style="margin-top:12px">
+          <label class="rang"><span>Date</span><input type="date" name="cdate"></label>
+          <label class="rang"><span>Début</span><input type="time" name="cdebut" step="900"></label>
+        </div>
+        <button type="button" class="bouton clair" data-c="ici" style="width:100%;margin-top:10px">Caser à cette heure</button>
+      </fieldset>
+      <p class="erreur" id="c-erreur" role="alert"></p>
+      <button type="button" class="supprimer" data-c="supprimer">Supprimer</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="feuille" id="guts" aria-labelledby="g-titre">
   <div class="f-haut">
     <span></span>
@@ -414,7 +474,7 @@
 (() => {
   'use strict';
   const CLE = 'guts-cal-v1';
-  const VERSION = 16;
+  const VERSION = 17;
 
   // ---------- Réglages ----------
   const CONFIG = {
@@ -428,6 +488,8 @@
     points: { tache: 10, libre: 15, libresParJour: 2, libreMin: 30 },
     heures: { coucher: 22, lever: 6, finNuit: 5 },   // Guts dort de coucher à lever ; pas de bilan avant finNuit
     surcharge: 10 * 60,                                // au-delà (minutes prévues dans la journée), Guts est fatigué
+    creneaux: { debut: 8 * 60, fin: 21 * 60 },         // « prochain créneau libre » : cherché entre ces heures
+    durees: [15, 30, 45, 60, 90, 120, 180],            // durées proposées pour une tâche à caser
     stades: [
       { id: 'renardeau',  nom: 'Renardeau',  seuil: 0,   echelle: 0.72 },
       { id: 'jeune',      nom: 'Jeune',      seuil: 80,  echelle: 0.86 },
@@ -611,12 +673,16 @@
   //             rep: null | { freq, jusqua }, exceptions: { date: true }, faits: { date: true }, creeLe: horodatage }
   // payes : { clé d'occurrence : { pts, jour, type, raison? } } — points versés (ou refusés, pts 0) ; gains : { jour : { taches, libre } }
   const vide = () => ({ elements: [], categories: CATS(), points: 0, gains: {}, payes: {}, bilanVu: null, vue: 'jour', derniereExport: null,
-    depuis: null, rappelVu: null, importV14: false });
+    depuis: null, rappelVu: null, importV14: false,
+    acaser: [] });   // tâches sans créneau : { id, titre, cat, duree, ajouteLe }
   let S;
   try { S = Object.assign(vide(), JSON.parse(localStorage.getItem(CLE)) || {}); }
   catch (e) { S = vide(); }
   function nettoyer() {
     if (!Array.isArray(S.elements)) S.elements = [];
+    if (!Array.isArray(S.acaser)) S.acaser = [];
+    S.acaser = S.acaser.filter(x => x && x.id && x.titre);
+    S.acaser.forEach(x => { x.duree = Math.max(15, Math.min(24 * 60, Math.round(Number(x.duree) || 60))); });
     if (!Array.isArray(S.categories) || !S.categories.length) S.categories = CATS();
     ['gains', 'payes'].forEach(c => { if (!S[c] || typeof S[c] !== 'object' || Array.isArray(S[c])) S[c] = {}; });
     S.elements = S.elements.filter(el => el && el.id && typeof el.date === 'string');
@@ -1038,7 +1104,7 @@
         ${taches.length ? `<span class="compte">Tâches : ${faites} / ${taches.length}</span>` : ''}</div>
       ${entieres.length ? `<div class="journee">${entieres.map(puce).join('')}</div>` : ''}
       <div class="defile" data-defile="jour">${grille([k])}</div>
-      ${boutonPlus()}`;
+      ${tiroir()}`;
   }
 
   function vueSemaine() {
@@ -1055,7 +1121,7 @@
       ${aEntieres ? `<div class="sem-journee"><span>jour</span>${entieres.map(e => `<div>${e.map(o =>
         `<button type="button" class="mini-puce${o.fait ? ' fait' : ''}" style="${styleEl(o.el)}" data-ouvrir="${o.cle}" aria-label="${esc(description(o))}" data-focus="o${o.cle}">${esc(o.el.titre)}</button>`).join('')}</div>`).join('')}<span></span></div>` : ''}
       <div class="defile semaine" data-defile="semaine">${grille(jours)}</div>
-      ${boutonPlus()}`;
+      ${tiroir()}`;
   }
 
   // ---------- Listes ----------
@@ -1107,7 +1173,7 @@
 
   function vueListe() {
     const auj = aujourdhui();
-    let h = '', total = 0;
+    let h = sectionCaser(), total = S.acaser.length;
     for (let i = 0; i < CONFIG.joursListe; i++) {
       const k = decaler(auj, i);
       const occs = duJour(k);
@@ -1119,6 +1185,82 @@
     }
     if (!total) h += `<div class="vide"><p>Rien de prévu pour les ${CONFIG.joursListe} prochains jours.</p><button type="button" class="bouton" data-action="ajouter" data-focus="ajouter-vide">Ajouter</button></div>`;
     return `<div class="defile" data-defile="liste">${h}<div class="bas-espace"></div></div>${boutonPlus()}`;
+  }
+
+  // ---------- À caser ----------
+  const dureeTexte = m => m < 60 ? `${m} min` : duree(m);
+  const puceCaser = x => `<div role="listitem"><button type="button" class="puce-caser" data-caser="${x.id}" style="${styleCat(x.cat)}" data-focus="pc${x.id}"
+      aria-label="${esc(x.titre)}, ${dureeTexte(x.duree)}, ${esc(cat(x.cat).nom)} : la caser"><b>${esc(x.titre)}</b><small>${dureeTexte(x.duree)} · ${esc(cat(x.cat).nom)}</small></button></div>`;
+  const listeCaser = () => S.acaser.length ? S.acaser.map(puceCaser).join('')
+    : '<p class="note" role="listitem">Rien à caser. Note ici ce qui n\'a pas encore de créneau.</p>';
+  const formAjout = () => `<form class="ajout-rapide" data-form="acaser"><label class="masque" for="acaser-nom-${U.vue}">Nouvelle tâche à caser</label>
+      <input id="acaser-nom-${U.vue}" name="nouvelle" maxlength="120" autocomplete="off" enterkeyhint="done" placeholder="Une tâche à caser…" data-focus="acaser-nom">
+      <button type="submit" class="bouton clair">Ajouter</button></form>`;
+  function tiroir() {
+    return `<div class="tiroir${U.tiroir ? ' ouvert' : ''}">
+      ${boutonPlus()}
+      <div class="tiroir-contenu" id="tiroir-contenu"${U.tiroir ? '' : ' hidden'}>
+        ${formAjout()}
+        <div class="caser-liste" role="list" aria-label="Tâches à caser" id="caser-liste">${listeCaser()}</div>
+        ${S.acaser.length ? '<p class="note">Maintiens une tâche puis glisse-la dans la grille, ou touche-la pour choisir son créneau.</p>' : ''}
+      </div>
+      <button type="button" class="tiroir-barre" data-action="tiroir" aria-expanded="${!!U.tiroir}" aria-controls="tiroir-contenu" data-focus="tiroir">
+        <span>À caser</span><b aria-label="${S.acaser.length} tâche${S.acaser.length > 1 ? 's' : ''}">${S.acaser.length}</b><i aria-hidden="true">▲</i></button>
+    </div>`;
+  }
+  function sectionCaser() {
+    const lignes = S.acaser.map(x => `<div class="ligne-occ" style="${styleCat(x.cat)}">
+        <span class="marque"><i aria-hidden="true"></i></span>
+        <button type="button" class="ouvrir" data-caser-ouvrir="${x.id}" aria-label="${esc(x.titre)}, ${dureeTexte(x.duree)}, à caser : ouvrir" data-focus="co${x.id}">
+          <span class="heures">${dureeTexte(x.duree)}</span><span class="quoi"><b>${esc(x.titre)}</b><small>${esc(cat(x.cat).nom)} · à caser</small></span></button>
+        <button type="button" class="bouton clair petit" data-caser-auto="${x.id}" data-focus="ca${x.id}" aria-label="Caser « ${esc(x.titre)} » au prochain créneau libre">Caser</button>
+      </div>`).join('');
+    return `<section class="section-caser" aria-label="À caser"><h2 class="titre-jour"><span>À caser</span><small>${S.acaser.length}</small></h2>
+      ${formAjout()}${lignes}</section>`;
+  }
+  // Met à jour la liste du tiroir sans tout redessiner (le clavier de l'iPhone reste ouvert)
+  function majTiroir() {
+    const l = $('#caser-liste');
+    if (!l) return render();
+    l.innerHTML = listeCaser();
+    const b = $('.tiroir-barre b');
+    if (b) { b.textContent = S.acaser.length; b.setAttribute('aria-label', `${S.acaser.length} tâche${S.acaser.length > 1 ? 's' : ''}`); }
+  }
+  function ajouterACaser(titre, opts = {}) {
+    const x = { id: uid(), titre: titre.slice(0, 120), cat: opts.cat || (S.categories.find(c => c.id === 'perso') || S.categories[0]).id, duree: opts.duree || CONFIG.duree, ajouteLe: Date.now() };
+    S.acaser.push(x);
+    return x;
+  }
+  // Premier créneau libre de cette durée, entre creneaux.debut et creneaux.fin, à partir de maintenant (14 jours)
+  function prochainCreneau(d) {
+    const auj = aujourdhui();
+    for (let i = 0; i < 14; i++) {
+      const k = decaler(auj, i);
+      let t = Math.max(CONFIG.creneaux.debut, i === 0 ? Math.ceil((minNow() + 5) / 15) * 15 : 0);
+      const occupe = duJour(k).filter(o => o.el.debut != null).map(o => [o.el.debut, o.el.fin]).sort((a, b) => a[0] - b[0]);
+      for (const [a, b] of occupe) { if (a >= t + d) break; if (b > t) t = b; }
+      if (t + d <= CONFIG.creneaux.fin) return { k, debut: t };
+    }
+    return null;
+  }
+  const quand = (k, debut, fin) => `${k === aujourdhui() ? "aujourd'hui" : k === decaler(aujourdhui(), 1) ? 'demain' : fmt(k, { weekday: 'long', day: 'numeric', month: 'long' })}, ${hhmm(debut)} – ${hhmm(fin)}`;
+  // Pose une tâche à caser dans le calendrier. Elle compte comme planifiée maintenant.
+  function placer(id, k, debut) {
+    const x = S.acaser.find(y => y.id === id);
+    if (!x) return null;
+    debut = borne(debut, 0, 1440 - Math.min(x.duree, 1440));
+    const el = { id: uid(), type: 'tache', titre: x.titre, cat: x.cat, date: k, debut, fin: Math.min(debut + x.duree, 1440), rep: null, exceptions: {}, faits: {}, creeLe: Date.now() };
+    S.elements.push(el);
+    S.acaser = S.acaser.filter(y => y !== x);
+    sauver();
+    const cle = el.id + '|' + k;
+    U.selection = null; U.brouillon = null;
+    if (U.vue === 'jour' && k !== U.date) U.date = k;
+    if (U.vue === 'semaine' && lundiDe(k) !== lundiDe(U.date)) U.date = k;
+    render();
+    const o = trouver(cle);
+    if (!avertir(cle)) dire(`« ${x.titre} » casée : ${quand(k, el.debut, el.fin)}.${o && !prevue(o) ? ' Déjà commencée : pas de points.' : ''}`);
+    return cle;
   }
 
   const boutonPlus = () => `<button type="button" class="plus" data-action="ajouter" aria-label="Ajouter une tâche ou un événement" data-focus="plus">${ICONE.plus}</button>`;
@@ -1247,6 +1389,7 @@
     $('#ed-erreur').textContent = '';
     $('#ed-ok').textContent = o ? 'OK' : 'Ajouter';
     $('#ed-supprimer').hidden = !o;
+    U.edition.peutCaser = !o || (!o.el.rep && !o.fait);
     majEditeur();
     ED.showModal();
     if (!o) setTimeout(() => champ('titre').focus(), 60);
@@ -1260,6 +1403,7 @@
     $('#ed-jusqua-note').hidden = !rep;
     const type = champ('type').value;
     const libre = type === 'libre';
+    $('#ed-acaser').hidden = !(type === 'tache' && U.edition && U.edition.peutCaser && !champ('rep').value);
     $('#ed-fait').hidden = !(type === 'tache' && U.edition && U.edition.o);
     // Un temps pour moi a toujours des heures et pas de catégorie
     $('#ed-journee').classList.toggle('cache', libre);
@@ -1356,6 +1500,20 @@
     const b = e.target.closest('[data-ed]');
     if (!b) return;
     if (b.dataset.ed === 'annuler') { ED.close(); return; }
+    if (b.dataset.ed === 'acaser') {
+      const r = lireFormulaire();
+      if (r.erreur) { $('#ed-erreur').textContent = r.erreur; r.champ.focus(); return; }
+      const o = U.edition.o;
+      const x = ajouterACaser(r.champs.titre, { cat: r.champs.cat, duree: r.champs.debut == null ? CONFIG.duree : r.champs.fin - r.champs.debut });
+      if (o) supprimerOcc(o, 'une');
+      sauver();
+      ED.close();
+      U.selection = null;
+      U.tiroir = true;
+      render('tiroir');
+      dire(`« ${x.titre} » mise à caser.`);
+      return;
+    }
     if (b.dataset.ed === 'supprimer') {
       const o = U.edition.o;
       let portee = 'une';
@@ -1486,7 +1644,7 @@
   // Tactile : appui long sur un vide puis glisser dessine ; appui long sur une plage la soulève ; les poignées la redimensionnent.
   // Un toucher simple sur un vide pose une « Nouvelle » plage d'une heure, ajustable, à toucher pour la remplir.
   let G = null;
-  const actif = () => G && ['creer', 'deplacer', 'redim'].includes(G.mode);
+  const actif = () => G && ['creer', 'deplacer', 'redim', 'caser'].includes(G.mode);
   function sous(e) {
     const r = G.cols.getBoundingClientRect();
     const n = G.cols.children.length;
@@ -1535,6 +1693,7 @@
     if (s) s.textContent = `${hhmm(G.debut)} – ${hhmm(G.fin)}`;
   }
   function suivre(e, sansBord) {
+    if (G.mode === 'caser') { suivreCaser(e); if (!sansBord) defilerBord(e); return; }
     const p = sous(e);
     if (G.mode === 'creer') {
       // Tant qu'on n'a pas bougé d'un quart d'heure, la plage garde la durée par défaut
@@ -1564,6 +1723,11 @@
   function defilerBord(e) {
     const d = G.cols.closest('.defile');
     const r = d.getBoundingClientRect();
+    // Depuis le tiroir, le doigt traverse le bas de la grille : pas de défilement avant d'y être vraiment entré
+    if (G.mode === 'caser') {
+      if (e.clientY > r.top + 40 && e.clientY < r.bottom - 40) G.entre = true;
+      if (!G.entre) return;
+    }
     const vitesse = e.clientY < r.top + 40 ? -8 : e.clientY > r.bottom - 40 ? 8 : 0;
     G.dernier = e;
     if (!vitesse) { cancelAnimationFrame(rafBord); rafBord = null; return; }
@@ -1585,6 +1749,12 @@
     G = null;
     cancelAnimationFrame(rafBord); rafBord = null;
     U.avaler = Date.now();
+    if (g.mode === 'caser') {
+      g.fantome.remove();
+      if (g.apercu) { g.apercu.remove(); placer(g.caser, g.k, g.debut); }
+      else render();
+      return;
+    }
     if (g.mode === 'creer') {
       g.vue.remove();
       U.brouillon = { k: g.k, debut: g.debut, fin: g.fin };
@@ -1619,9 +1789,15 @@
     if (G || (e.pointerType === 'mouse' && e.button !== 0)) return;
     if (e.target.closest('.case')) return;
     const tactile = e.pointerType !== 'mouse';
+    const puceC = e.target.closest('[data-caser]');
+    if (puceC) {   // puce « À caser » : appui long (ou glisser à la souris) pour l'emmener dans la grille
+      G = { id: e.pointerId, depart: e, x0: e.clientX, y0: e.clientY, mode: 'attente', tactile, caser: puceC.dataset.caser, puceEl: puceC, sansBalayage: true };
+      if (tactile) G.minuteur = setTimeout(() => { if (G && G.mode === 'attente') demarrerCaser(); }, CONFIG.appuiLong);
+      return;
+    }
     const cols = e.target.closest('.colonnes');
     if (!cols) {   // ailleurs dans la feuille : seul le balayage horizontal compte
-      G = { id: e.pointerId, depart: e, x0: e.clientX, y0: e.clientY, mode: 'attente', libreSeul: true, tactile };
+      G = { id: e.pointerId, depart: e, x0: e.clientX, y0: e.clientY, mode: 'attente', libreSeul: true, tactile, sansBalayage: !!e.target.closest('.tiroir') };
       return;
     }
     const poignee = e.target.closest('[data-bord]');
@@ -1641,7 +1817,11 @@
     if (!G || e.pointerId !== G.id) return;
     const dist = Math.hypot(e.clientX - G.x0, e.clientY - G.y0);
     if (G.mode === 'attente') {
-      if (G.direct && dist > 5) demarrer('deplacer');
+      if (G.caser) {
+        if (!G.tactile && dist > 5) demarrerCaser();
+        else { if (dist > 10) { clearTimeout(G.minuteur); G.mode = 'libre'; } return; }
+      }
+      else if (G.direct && dist > 5) demarrer('deplacer');
       else if (G.libreSeul || G.tactile) { if (dist > 10) { clearTimeout(G.minuteur); G.mode = 'libre'; } return; }
       else if (dist > 5) demarrer(G.blocEl ? 'deplacer' : 'creer');
       else return;
@@ -1655,7 +1835,7 @@
     // Balayage horizontal : jour, semaine ou mois voisin
     const dx = e.clientX - G.x0, dy = e.clientY - G.y0;
     const g = G; G = null;
-    if (g.tactile && g.mode === 'libre' && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && U.vue !== 'liste') {
+    if (g.tactile && g.mode === 'libre' && !g.sansBalayage && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && U.vue !== 'liste') {
       U.avaler = Date.now();
       naviguer(dx < 0 ? 1 : -1);
     }
@@ -1665,15 +1845,59 @@
     clearTimeout(G.minuteur);
     const etait = actif();
     if (G.mode === 'creer' && G.vue) G.vue.remove();
+    if (G.mode === 'caser') { G.fantome.remove(); if (G.apercu) G.apercu.remove(); }
     G = null;
     if (etait) render();
   });
+  function demarrerCaser() {
+    const x = S.acaser.find(y => y.id === G.caser);
+    G.cols = $('#vue .colonnes');
+    if (!x || !G.cols) { G.mode = 'libre'; return; }
+    G.mode = 'caser';
+    G.x = x;
+    clearTimeout(G.minuteur);
+    if (navigator.vibrate && G.tactile) { try { navigator.vibrate(8); } catch (e) { /* facultatif */ } }
+    G.puceEl.classList.add('prise');
+    G.fantome = document.createElement('div');
+    G.fantome.className = 'fantome';
+    G.fantome.setAttribute('style', styleCat(x.cat));
+    G.fantome.textContent = x.titre;
+    document.body.appendChild(G.fantome);
+    suivreCaser(G.depart);
+  }
+  // Au-dessus de la grille : aperçu de la plage à l'heure visée ; ailleurs : la puce suit le doigt
+  function suivreCaser(e) {
+    const f = G.fantome;
+    f.style.left = e.clientX + 'px';
+    f.style.top = e.clientY + 'px';
+    const d = G.cols.closest('.defile').getBoundingClientRect(), c = G.cols.getBoundingClientRect();
+    const dessus = e.clientY >= d.top && e.clientY <= d.bottom && e.clientX >= c.left && e.clientX <= c.right;
+    f.classList.toggle('cache', dessus);
+    if (!dessus) { if (G.apercu) { G.apercu.remove(); G.apercu = null; } return; }
+    const p = sous(e);
+    const duree = Math.min(G.x.duree, 1440);
+    G.debut = borne(caler(p.min - 10), 0, 1440 - duree);
+    G.k = p.k;
+    if (!G.apercu) {
+      G.apercu = document.createElement('div');
+      G.apercu.className = 'bloc brouillon leve';
+      G.apercu.style.cssText = 'left:2px;width:calc(100% - 4px)';
+      G.apercu.innerHTML = `<span class="b-texte"><b>${esc(G.x.titre)}</b><small></small></span>`;
+    }
+    if (G.apercu.parentNode !== p.col) p.col.appendChild(G.apercu);
+    G.apercu.style.top = G.debut / 60 * H + 'px';
+    const h = Math.max(duree / 60 * H, 20);
+    G.apercu.style.height = h + 'px';
+    G.apercu.classList.toggle('court', h < 38);
+    G.apercu.querySelector('small').textContent = `${hhmm(G.debut)} – ${hhmm(G.debut + duree)}`;
+  }
+
   // Un nouvel appui ou une touche du clavier : plus de clic à ignorer
   document.addEventListener('pointerdown', () => { U.avaler = 0; }, true);
   document.addEventListener('keydown', () => { U.avaler = 0; }, true);
   // Empêche la page de défiler pendant un geste (Safari)
   document.addEventListener('touchmove', e => { if (actif()) e.preventDefault(); }, { passive: false });
-  VUE.addEventListener('contextmenu', e => { if (e.target.closest('.colonnes')) e.preventDefault(); });
+  VUE.addEventListener('contextmenu', e => { if (e.target.closest('.colonnes, [data-caser]')) e.preventDefault(); });
 
   // ---------- Clics ----------
   document.addEventListener('click', e => {
@@ -1708,6 +1932,10 @@
     if (d.action === 'guts') return ouvrirGuts();
     if (d.action === 'sauvegarder') return exporter().then(() => render());
     if (d.action === 'plus-tard') { S.rappelVu = aujourdhui(); sauver(); return render('plus'); }
+    if (d.action === 'tiroir') { U.tiroir = !U.tiroir; return render('tiroir'); }
+    if (d.caser) return ouvrirCaser(d.caser);
+    if (d.caserOuvrir) return ouvrirCaser(d.caserOuvrir);
+    if (d.caserAuto) return caserAuto(d.caserAuto);
     if (b.classList.contains('colonne')) {
       // Toucher un vide : enlève la sélection, ou pose une nouvelle plage d'une heure
       if (U.selection || U.brouillon) { U.selection = null; U.brouillon = null; return render(); }
@@ -1716,6 +1944,21 @@
       U.brouillon = { k: b.dataset.jour, debut: m, fin: m + CONFIG.duree };
       return render();
     }
+  });
+
+  // Saisie rapide d'une tâche à caser (tiroir ou Liste)
+  document.addEventListener('submit', e => {
+    const f = e.target.closest('[data-form="acaser"]');
+    if (!f) return;
+    e.preventDefault();
+    const champT = f.elements.namedItem('nouvelle');
+    const t = champT.value.trim();
+    if (!t) { champT.focus(); return; }
+    ajouterACaser(t);
+    sauver();
+    champT.value = '';
+    if (U.vue === 'liste') render('acaser-nom'); else majTiroir();
+    dire(`« ${t} » ajoutée à caser.`);
   });
 
   // Clavier : flèches gauche et droite pour changer de jour, de semaine ou de mois
@@ -1740,6 +1983,89 @@
     const n = document.querySelector(`[data-vue="${ordreV[i]}"]`);
     if (n) n.focus();
   });
+
+  // ---------- Feuille d'une tâche à caser ----------
+  const CD = $('#caser'), FC = $('#form-caser');
+  const chC = n => FC.elements.namedItem(n);
+  function ouvrirCaser(id) {
+    const x = S.acaser.find(y => y.id === id);
+    if (!x) return;
+    U.caser = id;
+    FC.reset();
+    chC('nom').value = x.titre;
+    const durees = CONFIG.durees.includes(x.duree) ? CONFIG.durees : CONFIG.durees.concat(x.duree).sort((a, b) => a - b);
+    chC('cduree').innerHTML = durees.map(m => `<option value="${m}"${m === x.duree ? ' selected' : ''}>${dureeTexte(m)}</option>`).join('');
+    $('#c-cats').innerHTML = S.categories.map(c => `<label style="--c:${c.couleur}"><input type="radio" name="ccat" value="${esc(c.id)}"${c.id === cat(x.cat).id ? ' checked' : ''}><i aria-hidden="true"></i>${esc(c.nom)}</label>`).join('');
+    $('#c-erreur').textContent = '';
+    majCaser(true);
+    CD.showModal();
+  }
+  // Le bouton « prochain créneau libre » suit la durée choisie ; la date et l'heure proposées aussi
+  function majCaser(remplir) {
+    const d = +chC('cduree').value;
+    const c = prochainCreneau(d);
+    const b = $('#c-auto');
+    b.disabled = !c;
+    b.textContent = c ? `Prochain créneau libre : ${quand(c.k, c.debut, Math.min(c.debut + d, 1440))}` : 'Aucun créneau libre dans les 14 jours';
+    if (remplir) {
+      chC('cdate').value = c ? c.k : aujourdhui();
+      chC('cdebut').value = hhmm(c ? c.debut : 9 * 60);
+    }
+  }
+  FC.addEventListener('change', e => { if (e.target.name === 'cduree') majCaser(false); });
+  // Enregistre titre, durée et catégorie ; renvoie false si le titre manque
+  function garderCaser() {
+    const x = S.acaser.find(y => y.id === U.caser);
+    if (!x) return null;
+    const t = chC('nom').value.trim();
+    if (!t) { $('#c-erreur').textContent = 'Donne un titre.'; chC('nom').focus(); return null; }
+    x.titre = t;
+    x.duree = +chC('cduree').value;
+    const c = FC.querySelector('input[name="ccat"]:checked');
+    if (c) x.cat = c.value;
+    return x;
+  }
+  FC.addEventListener('submit', e => {
+    e.preventDefault();
+    if (!garderCaser()) return;
+    sauver();
+    CD.close();
+    render();
+  });
+  CD.addEventListener('click', e => {
+    const b = e.target.closest('[data-c]');
+    if (!b) return;
+    const a = b.dataset.c;
+    if (a === 'annuler') { CD.close(); return; }
+    if (a === 'supprimer') {
+      const x = S.acaser.find(y => y.id === U.caser);
+      S.acaser = S.acaser.filter(y => y !== x);
+      sauver(); CD.close(); render('tiroir');
+      if (x) dire(`« ${x.titre} » supprimée.`);
+      return;
+    }
+    const x = garderCaser();
+    if (!x) return;
+    if (a === 'auto') {
+      const c = prochainCreneau(x.duree);
+      if (!c) return;
+      CD.close();
+      placer(x.id, c.k, c.debut);
+    }
+    if (a === 'ici') {
+      const k = chC('cdate').value, m = versMin(chC('cdebut').value);
+      if (!k || m == null) { $('#c-erreur').textContent = 'Choisis une date et une heure.'; return; }
+      CD.close();
+      placer(x.id, k, m);
+    }
+  });
+  function caserAuto(id) {
+    const x = S.acaser.find(y => y.id === id);
+    if (!x) return;
+    const c = prochainCreneau(x.duree);
+    if (!c) { dire('Aucun créneau libre dans les 14 jours.'); return; }
+    placer(id, c.k, c.debut);
+  }
 
   // ---------- Panneau Guts ----------
   const GD = $('#guts');
