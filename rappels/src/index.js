@@ -4,6 +4,7 @@
 // Chaque minute, une tâche planifiée envoie ceux de la minute écoulée par Web Push, chiffrés pour le
 // téléphone (RFC 8291, aes128gcm) et signés avec la clé du service (VAPID, RFC 8292).
 // Tout tient dans une seule entrée KV « etat » : { clients: { jeton: { abonnement, rappels, maj, expire? } } }.
+// Il garde aussi le coffre : les sauvegardes chiffrées de l'app (voir plus bas).
 // Les clés VAPID sont créées au premier appel et gardées dans KV, entrée « vapid ».
 
 const SUJET = 'https://medbensito.github.io/guts/';   // « sub » de VAPID : où joindre l'auteur
@@ -78,6 +79,63 @@ async function envoyer(env, abonnement, message, ttl = 3600) {
   return r.status;
 }
 
+// ---------- Coffre : sauvegardes chiffrées de l'app ----------
+// L'app chiffre ses données elle-même (le service ne voit jamais la clé). Identifiant et jeton d'écriture sont des
+// empreintes SHA-256 dérivées du code de récupération ; on ne garde que l'empreinte du jeton.
+// KV : « coffre:<id> » = { hash, jours, derniere } ; « coffre:<id>:<AAAA-MM-JJ> » = la sauvegarde du jour (UTC) ; « coffres » = liste des id.
+const MAX_COFFRE = 5 * 1024 * 1024;
+const JOURS_GARDES = 7;
+const MAX_COFFRES = 20;
+async function sha256hex(t) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(t)));
+  return [...h].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function coffre(req, env, id, jour) {
+  const cleMeta = 'coffre:' + id;
+  const meta = await env.RAPPELS.get(cleMeta, 'json');
+  if (req.method === 'GET' && !jour) return meta ? json({ jours: meta.jours, derniere: meta.derniere }) : json({ erreur: 'introuvable' }, 404);
+  if (req.method === 'GET' && jour) {
+    if (!meta || !meta.jours.includes(jour)) return json({ erreur: 'introuvable' }, 404);
+    const b = await env.RAPPELS.get(cleMeta + ':' + jour);
+    return b ? new Response(b, { headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS } }) : json({ erreur: 'introuvable' }, 404);
+  }
+  // Écrire ou effacer : il faut le jeton d'écriture
+  const jeton = jetonDe(req);
+  if (!/^[0-9a-f]{64}$/.test(jeton)) return json({ erreur: 'jeton manquant' }, 401);
+  const h = await sha256hex(jeton);
+  if (meta && meta.hash !== h) return json({ erreur: 'refusé' }, 403);
+  if (req.method === 'PUT' && !jour) {
+    const texte = await req.text();
+    if (texte.length > MAX_COFFRE) return json({ erreur: 'trop gros' }, 413);
+    let d;
+    try { d = JSON.parse(texte); } catch (e) { return json({ erreur: 'illisible' }, 400); }
+    if (!d || d.v !== 1 || typeof d.sel !== 'string' || typeof d.iv !== 'string' || typeof d.donnees !== 'string') return json({ erreur: 'format' }, 400);
+    if (!meta) {
+      const liste = (await env.RAPPELS.get('coffres', 'json')) || [];
+      if (liste.length >= MAX_COFFRES) return json({ erreur: 'trop de coffres' }, 429);
+      liste.push(id);
+      await env.RAPPELS.put('coffres', JSON.stringify(liste));
+    }
+    const auj = new Date().toISOString().slice(0, 10);
+    await env.RAPPELS.put(cleMeta + ':' + auj, texte);
+    const jours = [auj, ...((meta && meta.jours) || []).filter(j => j !== auj)].sort().reverse();
+    for (const j of jours.slice(JOURS_GARDES)) await env.RAPPELS.delete(cleMeta + ':' + j);
+    const garder = jours.slice(0, JOURS_GARDES);
+    await env.RAPPELS.put(cleMeta, JSON.stringify({ hash: h, jours: garder, derniere: Date.now() }));
+    return json({ ok: true, jour: auj, jours: garder });
+  }
+  if (req.method === 'DELETE' && !jour) {
+    if (meta) {
+      for (const j of meta.jours) await env.RAPPELS.delete(cleMeta + ':' + j);
+      await env.RAPPELS.delete(cleMeta);
+      const liste = ((await env.RAPPELS.get('coffres', 'json')) || []).filter(x => x !== id);
+      await env.RAPPELS.put('coffres', JSON.stringify(liste));
+    }
+    return json({ ok: true });
+  }
+  return json({ erreur: 'introuvable' }, 404);
+}
+
 // ---------- Validation ----------
 function abonnementValide(a) {
   return a && typeof a.endpoint === 'string' && /^https?:\/\//.test(a.endpoint) && a.endpoint.length < 1000
@@ -123,6 +181,9 @@ export default {
     try {
       if (chemin === '/' && req.method === 'GET') return json({ service: 'Guts : rappels', ok: true });
       if (chemin === '/cle' && req.method === 'GET') return json({ cle: (await vapid(env)).publique });
+      const mc = chemin.match(/^\/coffre\/([0-9a-f]{64})(?:\/(\d{4}-\d\d-\d\d))?$/);
+      if (mc) return coffre(req, env, mc[1], mc[2]);
+      if (chemin.startsWith('/coffre')) return json({ erreur: 'introuvable' }, 404);
 
       if (chemin === '/abonner' && req.method === 'POST') {
         const d = await req.json().catch(() => null);

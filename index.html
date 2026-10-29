@@ -432,6 +432,11 @@
   .rt-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .rt-actions .bouton { min-height: 38px; padding: 0 12px; font-size: 11px; box-shadow: 2px 2px 0 var(--noir); }
   .lien-discret { border: 0; background: none; color: var(--gris); font-weight: 700; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 8px 4px; min-height: 38px; margin-left: auto; }
+  .code-coffre { margin: 0; padding: 14px 10px; text-align: center; font: 700 21px/1.35 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .05em;
+    border: 2px dashed var(--trait); border-radius: 10px; background: var(--champ); color: var(--encre); -webkit-user-select: all; user-select: all; overflow-wrap: anywhere; }
+  .champ-code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .05em; text-transform: uppercase; }
+  .sous-titre { margin: 16px 0 6px; font-size: 13px; font-weight: 800; }
+  #coffre .bouton { width: 100%; }
   .rt-msg { flex: none; margin: 0; padding: 8px 14px; background: var(--encre); color: var(--papier); font-weight: 700; font-size: 14px; }
   .rt-msg:empty { display: none; }
   .rt-fini { text-align: center; display: grid; gap: 6px; justify-items: center; }
@@ -546,6 +551,16 @@
   <div class="f-corps" id="g-corps"></div>
 </dialog>
 
+<dialog class="feuille" id="coffre" aria-labelledby="cf-titre">
+  <div class="f-haut">
+    <span></span>
+    <h2 id="cf-titre">Sauvegarde</h2>
+    <button type="button" class="lien fort" data-cf="fermer">Fermer</button>
+  </div>
+  <p class="rt-msg" id="cf-msg" role="status" aria-live="polite"></p>
+  <div class="f-corps" id="cf-corps"></div>
+</dialog>
+
 <dialog class="feuille" id="retard" aria-labelledby="rt-titre">
   <div class="f-haut">
     <span></span>
@@ -579,7 +594,7 @@
 (() => {
   'use strict';
   const CLE = 'guts-cal-v1';
-  const VERSION = 21;
+  const VERSION = 22;
 
   // ---------- Réglages ----------
   const CONFIG = {
@@ -782,6 +797,7 @@
   function rappelsVides() {
     return { actif: false, jeton: null, service: null, avant: true, delai: 30, matin: true, heureMatin: 8 * 60, sauvegarde: true, signature: null, majLe: null, erreur: null };
   }
+  function coffreVide() { return { actif: false, derniere: null, envoiLe: null, jours: [], erreur: null, signature: null }; }
   const vide = () => ({ elements: [], categories: CATS(), points: 0, gains: {}, payes: {}, bilanVu: null, vue: 'jour', derniereExport: null,
     depuis: null, rappelVu: null, importV14: false,
     acaser: [],             // tâches sans créneau : { id, titre, cat, duree, ajouteLe }
@@ -789,7 +805,8 @@
     bilanSemaineVu: null,   // lundi où le bilan de la semaine passée a été montré
     lachees: [],            // tâches laissées partir : { titre, date, lacheeLe }
     retardVu: null,         // jour où les tâches pas faites ont été proposées
-    rappels: null });       // notifications : voir rappelsVides()
+    rappels: null,          // notifications : voir rappelsVides()
+    coffre: null });        // sauvegarde automatique chiffrée : voir coffreVide() (le code reste à part, hors des données)
   let S;
   try { S = Object.assign(vide(), JSON.parse(localStorage.getItem(CLE)) || {}); }
   catch (e) { S = vide(); }
@@ -798,6 +815,7 @@
     if (!Array.isArray(S.acaser)) S.acaser = [];
     if (!Array.isArray(S.lachees)) S.lachees = [];
     S.rappels = Object.assign(rappelsVides(), S.rappels && typeof S.rappels === 'object' ? S.rappels : {});
+    S.coffre = Object.assign(coffreVide(), S.coffre && typeof S.coffre === 'object' ? S.coffre : {});
     if (S.lachees.length > 300) S.lachees.length = 300;
     S.acaser = S.acaser.filter(x => x && x.id && x.titre);
     S.acaser.forEach(x => { x.duree = Math.max(15, Math.min(24 * 60, Math.round(Number(x.duree) || 60))); });
@@ -816,7 +834,7 @@
   nettoyer();
   let erreurStockage = false;
   // Enregistre, puis prévient le service de rappels si la liste des rappels a changé
-  const sauver = () => { ecrire(); planifierSynchro(); };
+  const sauver = () => { ecrire(); planifierSynchro(); planifierCoffre(); };
   const ecrire = () => {
     nettoyer();
     // Journal et paiements : les quatre derniers mois suffisent
@@ -962,6 +980,8 @@
 
   // Service de rappels : adresse (undefined = pas encore cherchée, null = pas en place), clé publique, minuterie
   const RAP = { service: undefined, cle: null, minuteur: null, enCours: false, reabonner: null };
+  // Sauvegarde automatique : minuterie, envoi en cours, coût de la dérivation de clé
+  const COF = { minuteur: null, enCours: false, iter: 200000 };
 
   // ---------- État de l'écran (non enregistré) ----------
   const U = {
@@ -1677,7 +1697,6 @@
   const RG = $('#reglages');
   function renderReglages() {
     setTimeout(preparerRappels, 0);
-    const der = S.derniereExport ? new Date(S.derniereExport).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
     $('#r-corps').innerHTML = `
       <fieldset><legend>Catégories</legend>
         <div class="groupe">
@@ -1698,14 +1717,7 @@
         <p class="note" style="margin-top:8px">Automatique suit le réglage clair ou sombre de ton téléphone.</p>
       </fieldset>
       <fieldset id="r-rappels">${htmlRappels()}</fieldset>
-      <fieldset><legend>Sauvegarde</legend>
-        <p class="note">Tes données restent sur cet appareil. Exporte-les de temps en temps vers Fichiers ou iCloud Drive : c'est ce qui te permet de les retrouver si tu changes de téléphone ou supprimes l'app.</p>
-        <p class="note" style="margin-top:6px"><b>${der ? 'Dernière sauvegarde : ' + der + '.' : 'Aucune sauvegarde pour l\'instant.'}</b></p>
-        <div class="actions" style="margin-top:10px">
-          <button type="button" class="bouton" data-r="exporter">Sauvegarder</button>
-          <button type="button" class="bouton clair" data-r="importer">Restaurer</button>
-        </div>
-      </fieldset>
+      <fieldset id="r-coffre">${htmlCoffre()}</fieldset>
       <p class="version">Guts v${VERSION}</p>`;
   }
   RG.addEventListener('input', e => {
@@ -1797,8 +1809,7 @@
     if (!d || !Array.isArray(d.elements)) { dire("Ce fichier n'est pas une sauvegarde du calendrier Guts."); return; }
     const ok = await demander('Restaurer cette sauvegarde ?', 'Elle remplacera tout ce qui est sur cet appareil.', [{ texte: 'Restaurer', valeur: true }, { texte: 'Annuler', valeur: false, clair: true }]);
     if (!ok) return;
-    S = Object.assign(vide(), d);
-    if (!S.depuis) S.depuis = aujourdhui();
+    appliquerRestauration(d);
     sauver();
     U.vue = S.vue || 'jour';
     renderReglages();
@@ -2553,7 +2564,7 @@
   function rappel() {
     if (!S.elements.length || U.vue === undefined) return '';
     const auj = aujourdhui();
-    const der = S.derniereExport ? dk(new Date(S.derniereExport)) : null;
+    const der = derniereCopie() ? dk(new Date(derniereCopie())) : null;
     if (der ? ecart(der, auj) < 7 : ecart(S.depuis || auj, auj) < 3) return '';
     if (S.rappelVu && ecart(S.rappelVu, auj) < 3) return '';
     const n = der ? ecart(der, auj) : 0;
@@ -2611,8 +2622,9 @@
   }
   // Réglages ouverts : on cherche le service et sa clé d'avance, pour que « Activer » enchaîne sans attente
   async function preparerRappels() {
-    if (!pushPossible()) return;
     await serviceRappels();
+    majCoffreUI();
+    if (!pushPossible()) return;
     await cleVapid();
     majRappelsUI();
   }
@@ -2692,12 +2704,12 @@
       }
     }
     if (R.sauvegarde && S.elements.length) {
-      const der = S.derniereExport ? dk(new Date(S.derniereExport)) : (S.depuis || auj);
+      const der = derniereCopie() ? dk(new Date(derniereCopie())) : (S.depuis || auj);
       let k = decaler(der, 7);
       if (k <= auj) k = minNow() < CONFIG.rappels.heureSauvegarde ? auj : decaler(auj, 1);
       for (; k < decaler(auj, CONFIG.rappels.horizon); k = decaler(k, 7)) {
         res.push({ at: parse(k).getTime() + CONFIG.rappels.heureSauvegarde * 6e4, titre: 'Pense à sauvegarder Guts',
-          corps: `${S.derniereExport ? `Ta dernière sauvegarde date de ${ecart(der, k)} jours.` : 'Tes données ne sont que sur ce téléphone.'} Réglages › Sauvegarder.`, tag: 'sauvegarde-' + k });
+          corps: `${derniereCopie() ? `Ta dernière sauvegarde date de ${ecart(der, k)} jours.` : 'Tes données ne sont que sur ce téléphone.'} Réglages › Sauvegarder.`, tag: 'sauvegarde-' + k });
       }
     }
     return res.sort((a, b) => a.at - b.at || a.tag.localeCompare(b.tag));
@@ -2801,6 +2813,245 @@
     if (cible && (focus || actif)) cible.focus();
   }
 
+  // ---------- Sauvegarde automatique chiffrée (coffre) ----------
+  // Guts chiffre ses données sur l'appareil (AES-GCM, clé tirée du code de récupération par PBKDF2) et dépose la copie
+  // sur le service (rappels/), qui garde 7 jours. Le code (20 caractères, 100 bits) reste sur l'appareil, hors des données.
+  const CLE_CODE = 'guts-coffre-code';
+  const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';            // sans I, L, O, U : pas de confusion à la lecture
+  const lireCode = () => { try { return localStorage.getItem(CLE_CODE) || ''; } catch (e) { return ''; } };
+  const garderCode = c => { try { if (c) localStorage.setItem(CLE_CODE, c); else localStorage.removeItem(CLE_CODE); } catch (e) { /* stockage indisponible */ } };
+  const nouveauCode = () => Array.from(crypto.getRandomValues(new Uint8Array(20)), b => ALPHABET[b & 31]).join('');
+  const normaliser = t => String(t || '').toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1').replace(/U/g, 'V').replace(/[^0-9A-Z]/g, '');
+  const formater = c => c.replace(/(.{4})(?=.)/g, '$1-');
+  const codeValide = c => c.length === 20 && [...c].every(x => ALPHABET.includes(x));
+  async function sha256hex(t) {
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)));
+    return Array.from(h, b => b.toString(16).padStart(2, '0')).join('');
+  }
+  const idCoffre = c => sha256hex('guts-coffre-id:' + c);
+  const jetonCoffre = c => sha256hex('guts-coffre-ecriture:' + c);
+  const enB64 = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); };
+  const deB64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+  async function cleCoffre(code, sel, iter) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(code), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: sel, iterations: iter }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  const fluxVers = async (u8, t) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(t)).arrayBuffer());
+  async function chiffrerCoffre(code, texte) {
+    let brut = new TextEncoder().encode(texte), gz = false;
+    if (window.CompressionStream) { brut = await fluxVers(brut, new CompressionStream('gzip')); gz = true; }
+    const sel = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await cleCoffre(code, sel, COF.iter), brut));
+    return { v: 1, gz, iter: COF.iter, sel: enB64(sel), iv: enB64(iv), donnees: enB64(ct), le: Date.now() };
+  }
+  async function dechiffrerCoffre(code, b) {
+    let brut = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(b.iv) }, await cleCoffre(code, deB64(b.sel), b.iter || COF.iter), deB64(b.donnees)));
+    if (b.gz) brut = await fluxVers(brut, new DecompressionStream('gzip'));
+    return JSON.parse(new TextDecoder().decode(brut));
+  }
+  // Ce qui part dans la copie : tout, sauf ce qui est propre à cet appareil
+  const texteCopie = () => JSON.stringify(Object.assign({}, S, { rappels: undefined, coffre: undefined }));
+  // La plus récente des copies : fichier exporté ou copie automatique
+  const derniereCopie = () => Math.max(S.derniereExport ? Date.parse(S.derniereExport) || 0 : 0, (S.coffre && S.coffre.derniere) || 0);
+  function appliquerRestauration(d) {
+    const rap = S.rappels, cof = S.coffre;
+    S = Object.assign(vide(), d);
+    S.rappels = rap;          // l'abonnement aux rappels et le coffre appartiennent à cet appareil
+    S.coffre = cof;
+    if (!S.depuis) S.depuis = aujourdhui();
+    nettoyer();
+  }
+
+  // Après un changement : une copie 20 s plus tard, et au plus une toutes les 10 minutes
+  function planifierCoffre() {
+    const C = S.coffre;
+    if (!C || !C.actif) return;
+    clearTimeout(COF.minuteur);
+    COF.minuteur = setTimeout(() => envoyerCoffre(), Math.max(20000, (C.envoiLe || 0) + 10 * 60000 - Date.now()));
+  }
+  async function envoyerCoffre(forcer) {
+    const C = S.coffre, code = lireCode();
+    if (!C.actif || !code || COF.enCours) return false;
+    const url = await serviceRappels();
+    if (!url) return false;
+    const texte = texteCopie(), sig = empreinte(texte);
+    if (!forcer && sig === C.signature) return true;      // rien de neuf
+    COF.enCours = true;
+    try {
+      const corps = await chiffrerCoffre(code, texte);
+      const r = await fetch(`${url}/coffre/${await idCoffre(code)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await jetonCoffre(code) }, body: JSON.stringify(corps) });
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json();
+      Object.assign(C, { signature: sig, derniere: Date.now(), envoiLe: Date.now(), jours: d.jours || [], erreur: null });
+      ecrire();
+      return true;
+    } catch (e) {
+      Object.assign(C, { erreur: 'reseau', envoiLe: Date.now() });
+      ecrire();
+      return false;
+    } finally {
+      COF.enCours = false;
+      majCoffreUI();
+    }
+  }
+
+  const dateLongue = t => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  function statutCoffre() {
+    const C = S.coffre;
+    if (C.erreur === 'reseau') return 'Dernière copie impossible : le service ne répond pas. Guts réessaiera.';
+    if (!C.derniere) return 'Sauvegarde automatique active.';
+    const d = new Date(C.derniere), quandC = dk(d) === aujourdhui() ? "aujourd'hui" : dk(d) === decaler(aujourdhui(), -1) ? 'hier' : 'le ' + d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+    const n = (C.jours || []).length;
+    return `Sauvegarde automatique active · dernière copie ${quandC} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${n ? ` · ${n} jour${n > 1 ? 's' : ''} gardé${n > 1 ? 's' : ''}` : ''}.`;
+  }
+  function htmlCoffre(msg) {
+    const C = S.coffre, der = derniereCopie(), attente = RAP.service === undefined ? ' disabled' : '';
+    let h = '<legend>Sauvegarde</legend>';
+    if (RAP.service === null) h += '<p class="note">La sauvegarde automatique a besoin du service de rappels, pas encore en place.</p>';
+    else if (!C.actif) h += `<p class="note">${esc(msg || 'Guts peut garder tout seul une copie chiffrée de tes données sur ton service Cloudflare, chaque jour. Toi seul pourras la relire, avec ton code de récupération.')}</p>
+      <div class="actions" style="margin-top:10px"><button type="button" class="bouton" data-cf-ouvrir="nouveau"${attente}>Activer la sauvegarde automatique</button>
+        <button type="button" class="bouton clair" data-cf-ouvrir="restaurer"${attente}>Restaurer avec un code</button></div>`;
+    else h += `<p class="note" role="status"><b>${esc(msg || statutCoffre())}</b></p>
+      <div class="actions" style="margin-top:10px"><button type="button" class="bouton" data-cf-action="maintenant">Sauvegarder maintenant</button>
+        <button type="button" class="bouton clair" data-cf-ouvrir="voir">Afficher mon code</button></div>
+      <div class="actions"><button type="button" class="lien" data-cf-ouvrir="restaurer" style="justify-self:auto">Restaurer une sauvegarde</button>
+        <button type="button" class="lien fort" data-cf-action="arreter" style="justify-self:auto">Arrêter</button></div>`;
+    return h + `<h3 class="sous-titre">Dans un fichier</h3>
+      <p class="note">Tu peux aussi exporter tes données vers Fichiers ou iCloud Drive, et les importer plus tard.</p>
+      <p class="note" style="margin-top:6px"><b>${der ? 'Dernière sauvegarde : ' + dateLongue(der) + '.' : 'Aucune sauvegarde pour l\'instant.'}</b></p>
+      <div class="actions" style="margin-top:10px"><button type="button" class="bouton${C.actif ? ' clair' : ''}" data-r="exporter">Exporter</button>
+        <button type="button" class="bouton clair" data-r="importer">Importer</button></div>`;
+  }
+  function majCoffreUI(msg, focus) {
+    const f = document.getElementById('r-coffre');
+    if (!f || !RG.open) return;
+    const a = document.activeElement && f.contains(document.activeElement) ? document.activeElement : null;
+    const sel = a && (a.dataset.cfOuvrir ? `[data-cf-ouvrir="${a.dataset.cfOuvrir}"]` : a.dataset.cfAction ? `[data-cf-action="${a.dataset.cfAction}"]` : a.dataset.r ? `[data-r="${a.dataset.r}"]` : null);
+    f.innerHTML = htmlCoffre(msg);
+    const c = (focus && f.querySelector(focus)) || (sel && f.querySelector(sel));
+    if (c) c.focus();
+  }
+
+  // Feuille : nouveau code, code actuel, restauration
+  const CF = $('#coffre');
+  const libJour = j => cap(fmt(j, { weekday: 'long', day: 'numeric', month: 'long' })) + (j === aujourdhui() ? " (aujourd'hui)" : '');
+  function ouvrirCoffre(mode) {
+    U.coffre = { mode, code: mode === 'nouveau' ? nouveauCode() : lireCode(), jours: null, saisi: '' };
+    renderCoffre();
+    CF.showModal();
+    const f = CF.querySelector(mode === 'restaurer' ? '#cf-code' : '[data-cf="copier"]');
+    if (f) f.focus();
+  }
+  function renderCoffre(msg) {
+    const c = U.coffre;
+    $('#cf-titre').textContent = c.mode === 'restaurer' ? 'Restaurer' : 'Ton code';
+    $('#cf-msg').textContent = msg || '';
+    let h;
+    if (c.mode === 'restaurer') {
+      h = `<p class="note">Entre ton code de récupération pour retrouver tes sauvegardes. Ce que tu restaures remplacera ce qu'il y a sur ce téléphone.</p>
+        <label class="masque" for="cf-code">Code de récupération</label>
+        <input class="champ-titre champ-code" id="cf-code" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" value="${esc(c.saisi)}">
+        <button type="button" class="bouton${c.jours ? ' clair' : ''}" data-cf="chercher">Chercher mes sauvegardes</button>
+        ${c.jours ? `<fieldset><legend>Sauvegardes disponibles</legend><div class="cats">${c.jours.map((j, i) => `<label><input type="radio" name="cf-jour" value="${j}"${i === 0 ? ' checked' : ''}>${esc(libJour(j))}</label>`).join('')}</div></fieldset>
+        <button type="button" class="bouton" data-cf="restaurer">Restaurer</button>` : ''}`;
+    } else {
+      const nouveau = c.mode === 'nouveau';
+      h = `<p class="note">${nouveau ? 'Voici ton code de récupération. Garde-le en lieu sûr : dans tes Notes, ton gestionnaire de mots de passe ou sur papier. Il sert à relire tes sauvegardes, par exemple sur un nouveau téléphone. Sans lui, personne ne peut les relire, pas même toi.' : 'Ton code de récupération. Il sert à relire tes sauvegardes sur un autre appareil.'}</p>
+        <p class="code-coffre" id="code-coffre">${formater(c.code)}</p>
+        <button type="button" class="bouton clair" data-cf="copier">Copier le code</button>
+        ${nouveau ? `<div class="groupe"><label class="rang"><span>J'ai gardé mon code en lieu sûr</span><span class="interrupteur"><input type="checkbox" id="cf-note" role="switch"><i></i></span></label></div>
+        <button type="button" class="bouton" data-cf="activer" disabled>Activer la sauvegarde</button>` : ''}`;
+    }
+    $('#cf-corps').innerHTML = h;
+  }
+  CF.addEventListener('change', e => { if (e.target.id === 'cf-note') CF.querySelector('[data-cf="activer"]').disabled = !e.target.checked; });
+  CF.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'cf-code') { e.preventDefault(); CF.querySelector('[data-cf="chercher"]').click(); } });
+  CF.addEventListener('click', async e => {
+    const b = e.target.closest('[data-cf]');
+    if (!b || b.disabled) return;
+    const c = U.coffre, a = b.dataset.cf;
+    if (a === 'fermer') { CF.close(); return; }
+    if (a === 'copier') {
+      try { await navigator.clipboard.writeText(formater(c.code)); $('#cf-msg').textContent = 'Code copié.'; }
+      catch (err) { $('#cf-msg').textContent = 'Copie impossible : sélectionne le code et copie-le.'; }
+      return;
+    }
+    if (a === 'activer') {
+      garderCode(c.code);
+      S.coffre = Object.assign(coffreVide(), { actif: true });
+      ecrire();
+      CF.close();
+      majCoffreUI('Première copie en cours…');
+      const fait = await envoyerCoffre(true);
+      majCoffreUI(fait ? 'Sauvegarde automatique active. Première copie faite.' : null, '[data-cf-action="maintenant"]');
+      return;
+    }
+    if (a === 'chercher') {
+      c.saisi = $('#cf-code').value;
+      const code = normaliser(c.saisi);
+      if (!codeValide(code)) { renderCoffre('Ce code n\'a pas le bon format : 20 lettres et chiffres, comme XXXX-XXXX-XXXX-XXXX-XXXX.'); $('#cf-code').focus(); return; }
+      renderCoffre('Recherche…');
+      try {
+        const r = await fetch(`${await serviceRappels()}/coffre/${await idCoffre(code)}`);
+        if (r.status === 404) { c.jours = null; renderCoffre('Aucune sauvegarde trouvée pour ce code.'); $('#cf-code').focus(); return; }
+        if (!r.ok) throw new Error(r.status);
+        c.jours = (await r.json()).jours || [];
+        c.trouve = code;
+        renderCoffre(`${c.jours.length} sauvegarde${c.jours.length > 1 ? 's' : ''} trouvée${c.jours.length > 1 ? 's' : ''}.`);
+        CF.querySelector('[data-cf="restaurer"]').focus();
+      } catch (err) { renderCoffre('Le service ne répond pas. Réessaie dans un moment.'); }
+      return;
+    }
+    if (a === 'restaurer') {
+      const choix = CF.querySelector('input[name="cf-jour"]:checked');
+      if (!choix || !c.trouve) return;
+      let d;
+      try {
+        const r = await fetch(`${await serviceRappels()}/coffre/${await idCoffre(c.trouve)}/${choix.value}`);
+        if (!r.ok) throw new Error(r.status);
+        d = await dechiffrerCoffre(c.trouve, await r.json());
+        if (!d || !Array.isArray(d.elements)) throw new Error('format');
+      } catch (err) { renderCoffre('Impossible de relire cette sauvegarde avec ce code.'); return; }
+      const ok = await demander('Restaurer cette sauvegarde ?', `${libJour(choix.value)} : ${d.elements.length} élément${d.elements.length > 1 ? 's' : ''}, ${d.points || 0} points. Elle remplacera ce qu'il y a sur ce téléphone.`,
+        [{ texte: 'Restaurer', valeur: true }, { texte: 'Annuler', valeur: false, clair: true }]);
+      if (!ok) return;
+      appliquerRestauration(d);
+      garderCode(c.trouve);                 // la sauvegarde automatique continue avec ce code
+      S.coffre = Object.assign(coffreVide(), { actif: true, derniere: Date.now(), jours: c.jours, signature: empreinte(texteCopie()) });
+      sauver();
+      U.vue = S.vue || 'jour';
+      CF.close();
+      renderReglages();
+      render();
+      dire('Sauvegarde restaurée.');
+    }
+  });
+  RG.addEventListener('click', async e => {
+    const o = e.target.closest('[data-cf-ouvrir]');
+    if (o && !o.disabled) { ouvrirCoffre(o.dataset.cfOuvrir); return; }
+    const b = e.target.closest('[data-cf-action]');
+    if (!b) return;
+    if (b.dataset.cfAction === 'maintenant') {
+      majCoffreUI('Copie en cours…', '[data-cf-action="maintenant"]');
+      const fait = await envoyerCoffre(true);
+      majCoffreUI(fait ? null : 'La copie n\'est pas passée : le service ne répond pas.', '[data-cf-action="maintenant"]');
+    }
+    if (b.dataset.cfAction === 'arreter') {
+      const choix = await demander('Arrêter la sauvegarde automatique ?', 'Les copies déjà faites restent sur ton service, lisibles avec ton code. Tu peux aussi les effacer.',
+        [{ texte: 'Arrêter', valeur: 'arreter' }, { texte: 'Arrêter et effacer les copies', valeur: 'effacer' }, { texte: 'Annuler', valeur: null, clair: true }]);
+      if (!choix) return;
+      const code = lireCode();
+      if (choix === 'effacer' && code) {
+        try { await fetch(`${await serviceRappels()}/coffre/${await idCoffre(code)}`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + await jetonCoffre(code) } }); } catch (err) { /* le service les gardera 7 jours au plus */ }
+      }
+      clearTimeout(COF.minuteur);
+      garderCode('');
+      S.coffre = coffreVide();
+      ecrire();
+      majCoffreUI(choix === 'effacer' ? 'Sauvegarde automatique arrêtée, copies effacées.' : 'Sauvegarde automatique arrêtée.', '[data-cf-ouvrir="nouveau"]');
+    }
+  });
+
   // ---------- Thème clair ou sombre ----------
   const SOMBRE = window.matchMedia('(prefers-color-scheme: dark)');
   function appliquerTheme() {
@@ -2833,7 +3084,10 @@
     if (l) { l.style.top = m / 60 * H + 'px'; const s = l.querySelector('span'); if (s) s.textContent = hhmm(m); }
   }
   setInterval(rafraichir, 15000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { rafraichir(); synchroniser(); } });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { rafraichir(); synchroniser(); planifierCoffre(); }
+    else if (S.coffre.actif) envoyerCoffre();          // on quitte l'app : copie tout de suite si quelque chose a changé
+  });
 
   // Hors ligne : service worker, seulement quand la page est servie par un site (pas en fichier local)
   if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
@@ -2848,6 +3102,7 @@
   render();
   if (!montrerBilan()) montrerRetard();
   synchroniser();
+  if (S.coffre.actif) setTimeout(() => envoyerCoffre(), 5000);
   if (erreurStockage) dire("Attention : les données n'ont pas pu être enregistrées sur cet appareil.");
 })();
 </script>
