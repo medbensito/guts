@@ -286,7 +286,8 @@
   .f-haut h2 { margin: 0; font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; text-align: center; }
   .lien { border: 0; background: none; color: var(--bleu-texte); font-weight: 700; font-size: 16px; padding: 10px 8px; justify-self: start; min-height: 44px; }
   .lien.fort { justify-self: end; color: var(--rouge-texte); font-weight: 900; }
-  .f-corps { overflow-y: auto; padding: 14px 14px calc(env(safe-area-inset-bottom) + 18px); display: grid; gap: 14px; }
+  /* max-content : les rangées gardent leur hauteur quand la feuille déborde (sinon la carte de Guts s'écrase) */
+  .f-corps { overflow-y: auto; padding: 14px 14px calc(env(safe-area-inset-bottom) + 18px); display: grid; gap: 14px; grid-auto-rows: max-content; }
   .segment { display: grid; grid-template-columns: repeat(var(--n, 2), 1fr); border: 3px solid var(--trait); background: var(--champ); }
   .segment label { position: relative; text-align: center; padding: 10px 4px; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; border-left: 2px solid var(--trait); cursor: pointer; }
   .segment label:first-child { border-left: 0; }
@@ -382,6 +383,45 @@
   .regles .pts { flex: none; min-width: 44px; text-align: center; background: var(--encre); color: var(--papier); font-weight: 900; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
   .bilan-date { margin: 0; font-size: 13px; font-weight: 700; color: var(--gris); text-align: center; }
   #bilan .bouton { width: 100%; }
+
+  /* ---------- Bilan de la semaine ---------- */
+  .sm-nav { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 8px; }
+  .sm-nav p { margin: 0; text-align: center; }
+  .sm-nav p b { display: block; font-size: 16px; font-weight: 900; }
+  .sm-nav p small { display: block; font-size: 12px; font-weight: 700; color: var(--gris); margin-top: 2px; }
+  .sm-fleche { width: 44px; height: 44px; display: grid; place-items: center; border: 2px solid var(--trait); border-radius: 50%; background: var(--champ); color: var(--encre); padding: 0; }
+  .sm-fleche[disabled] { opacity: .35; cursor: default; }
+  .carte-guts.basse .grand-renard { height: 132px; }
+  .carte-guts.basse .grand-renard .fox { width: 128px; height: 128px; }
+  .stat .ecart { display: block; font-size: 11px; font-weight: 700; color: var(--gris); margin-top: 3px; text-transform: none; letter-spacing: 0; }
+  .stats.semaine-stats .stat b { font-variant-numeric: normal; }
+  .graphe { display: grid; gap: 10px; }
+  .graphe h3 { margin: 0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--gris); display: flex; justify-content: space-between; }
+  .graphe h3 span { color: var(--encre); letter-spacing: 0; text-transform: none; font-size: 13px; }
+  /* Barres horizontales : une par catégorie, valeur au bout, nom à gauche (la couleur n'est jamais seule) */
+  .h-ligne { display: grid; grid-template-columns: 82px 1fr auto; align-items: center; gap: 10px; min-height: 26px; }
+  .h-nom { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .h-piste { position: relative; height: 14px; }
+  .h-piste i { position: absolute; left: 0; top: 0; bottom: 0; min-width: 4px; background: var(--c); border-radius: 0 4px 4px 0; }
+  .h-val { font-size: 13px; font-weight: 700; color: var(--encre); min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; }
+  /* Colonnes jour par jour : hauteur = heures prévues, seuil de fatigue en trait fin */
+  .jours-graphe { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; height: 150px; padding-top: 16px; border-bottom: 1px solid var(--ligne-forte); }
+  .cj { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+  .cj-barre { width: min(24px, 70%); background: var(--bleu); border-radius: 4px 4px 0 0; min-height: 0; }
+  .cj.charge .cj-barre { background: var(--rouge); }
+  .cj.avenir .cj-barre { opacity: .45; }
+  .cj-val { font-size: 11px; font-weight: 700; color: var(--encre); margin-bottom: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .cj.charge .cj-val::before { content: "▲ "; color: var(--rouge-texte); }
+  .seuil { position: absolute; left: 0; right: 0; border-top: 1px solid var(--rouge-texte); pointer-events: none; }
+  .seuil span { position: absolute; right: 0; top: -15px; font-size: 10px; font-weight: 800; color: var(--rouge-texte); }
+  .jours-bas { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .jours-bas b { display: block; font-size: 12px; font-weight: 800; }
+  .jours-bas b.auj { color: var(--rouge-texte); }
+  .jours-bas small { display: block; font-size: 11px; color: var(--gris); font-variant-numeric: tabular-nums; }
+  .legende { margin: 0; font-size: 12px; color: var(--gris); line-height: 1.45; }
+  .faits-semaine { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .faits-semaine li { display: flex; gap: 10px; font-size: 14px; line-height: 1.4; }
+  .faits-semaine li::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--encre); }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -489,6 +529,15 @@
   <div class="f-corps" id="g-corps"></div>
 </dialog>
 
+<dialog class="feuille" id="semaine" aria-labelledby="sm-titre">
+  <div class="f-haut">
+    <span></span>
+    <h2 id="sm-titre">Bilan de la semaine</h2>
+    <button type="button" class="lien fort" data-sm="fermer">OK</button>
+  </div>
+  <div class="f-corps" id="sm-corps"></div>
+</dialog>
+
 <dialog class="feuille" id="bilan" aria-labelledby="b-titre">
   <div class="f-haut">
     <span></span>
@@ -503,7 +552,7 @@
 (() => {
   'use strict';
   const CLE = 'guts-cal-v1';
-  const VERSION = 18;
+  const VERSION = 19;
 
   // ---------- Réglages ----------
   const CONFIG = {
@@ -549,7 +598,8 @@
   const vide = () => ({ elements: [], categories: CATS(), points: 0, gains: {}, payes: {}, bilanVu: null, vue: 'jour', derniereExport: null,
     depuis: null, rappelVu: null, importV14: false,
     acaser: [],
-    theme: 'auto' });   // 'auto' (suit l'iPhone), 'clair' ou 'sombre'   // tâches sans créneau : { id, titre, cat, duree, ajouteLe }
+    theme: 'auto',
+    bilanSemaineVu: null });   // lundi où le bilan de la semaine passée a été montré   // 'auto' (suit l'iPhone), 'clair' ou 'sombre'   // tâches sans créneau : { id, titre, cat, duree, ajouteLe }
   let S;
   try { S = Object.assign(vide(), JSON.parse(localStorage.getItem(CLE)) || {}); }
   catch (e) { S = vide(); }
@@ -1981,6 +2031,7 @@
           <div class="stat"><b>+${ptsJour}</b><span>points</span></div>
         </div>
       </fieldset>
+      <button type="button" class="bouton clair" data-g="semaine" style="width:100%">Bilan de la semaine</button>
       <fieldset><legend>Gagner des points</legend>
         <ul class="regles">
           <li><span class="pts">+${CONFIG.points.tache}</span><span>Une tâche faite, si elle était prévue avant son début. Cochée en avance, elle rapporte à son heure.</span></li>
@@ -1989,7 +2040,10 @@
       </fieldset>`;
     GD.showModal();
   }
-  GD.addEventListener('click', e => { if (e.target.closest('[data-g="fermer"]')) GD.close(); });
+  GD.addEventListener('click', e => {
+    if (e.target.closest('[data-g="fermer"]')) GD.close();
+    if (e.target.closest('[data-g="semaine"]')) { GD.close(); ouvrirSemaine(lundiDe(aujourdhui())); }
+  });
 
   // ---------- Bilan du matin ----------
   const BD = $('#bilan');
@@ -2013,6 +2067,14 @@
   function montrerBilan() {
     const auj = aujourdhui();
     if (S.bilanVu === auj || new Date().getHours() < CONFIG.heures.finNuit || document.querySelector('dialog[open]')) return;
+    if (indexJour(auj) === 0 && S.bilanSemaineVu !== auj) {
+      const L = decaler(auj, -7);
+      S.bilanVu = auj; S.bilanSemaineVu = auj;
+      sauver();
+      if (semaineVide(bilanSemaine(L))) return;
+      ouvrirSemaine(L);
+      return;
+    }
     const k = decaler(auj, -1), b = bilanDe(k);
     S.bilanVu = auj;
     sauver();
@@ -2034,6 +2096,130 @@
   }
   BD.addEventListener('click', e => { if (e.target.closest('[data-b="ok"]')) BD.close(); });
   BD.addEventListener('close', () => render());
+
+  // ---------- Bilan de la semaine ----------
+  // Semaine du lundi L. Les tâches comptent jusqu'à aujourd'hui ; les temps pour moi, une fois terminés ;
+  // les heures prévues, sur toute la semaine (tâches et événements avec un horaire, et temps pour moi à part).
+  function bilanSemaine(L) {
+    const auj = aujourdhui(), now = Date.now();
+    const b = { L, enCours: L === lundiDe(auj), taches: 0, faites: 0, libres: 0, gardes: 0, minGardees: 0, points: 0, parCat: {}, minLibres: 0, jours: [] };
+    for (let i = 0; i < 7; i++) {
+      const k = decaler(L, i), occs = duJour(k), passe = k <= auj;
+      const t = occs.filter(o => o.el.type === 'tache');
+      if (passe) { b.taches += t.length; b.faites += t.filter(o => o.fait).length; }
+      occs.filter(o => o.el.type === 'libre').forEach(o => {
+        b.minLibres += o.el.fin - o.el.debut;
+        if (finOcc(o) > now) return;
+        b.libres++;
+        const p = S.payes[o.cle];
+        if (p && p.pts > 0) { b.gardes++; b.minGardees += o.el.fin - o.el.debut; }
+      });
+      occs.filter(o => o.el.type !== 'libre' && o.el.debut != null).forEach(o => { b.parCat[o.el.cat] = (b.parCat[o.el.cat] || 0) + o.el.fin - o.el.debut; });
+      const g = S.gains[k] || {};
+      b.points += (g.taches || 0) + (g.libre || 0);
+      b.jours.push({ k, minutes: minutesPrevues(k), taches: t.length, faites: t.filter(o => o.fait).length, avenir: !passe });
+    }
+    return b;
+  }
+  const semaineVide = b => !b.taches && !b.libres && !b.points && !b.minLibres && !Object.keys(b.parCat).length;
+  const pointsSemaine = L => Array.from({ length: 7 }, (_, i) => S.gains[decaler(L, i)] || {}).reduce((a, g) => a + (g.taches || 0) + (g.libre || 0), 0);
+  function phraseSemaine(b) {
+    if (semaineVide(b)) return 'Une semaine sans rien de prévu. Ça arrive, et c\'est bien aussi.';
+    const p = [];
+    if (b.taches) {
+      const t = b.faites / b.taches;
+      if (b.faites === b.taches) p.push(`Tu as tenu tout ce que tu avais prévu : ${b.taches} tâche${b.taches > 1 ? 's' : ''}.`);
+      else if (t >= .8) p.push(`Tu as tenu presque tout : ${b.faites} tâches sur ${b.taches}.`);
+      else if (t >= .5) p.push(`Tu as tenu l'essentiel : ${b.faites} tâche${b.faites > 1 ? 's' : ''} sur ${b.taches}.`);
+      else p.push(`${b.faites} tâche${b.faites > 1 ? 's' : ''} sur ${b.taches} : la semaine était peut-être trop pleine.`);
+    }
+    if (b.gardes) p.push(`Et tu as gardé ${duree(b.minGardees)} pour toi.`);
+    else if (b.libres) p.push('Ton temps pour toi a été grignoté : protège-le mieux la semaine prochaine.');
+    else if (!b.enCours) p.push('Pas de temps pour toi cette semaine : réserves-en un pour la prochaine ?');
+    return p.join(' ');
+  }
+  const SM = $('#semaine');
+  function ouvrirSemaine(L) {
+    U.semaine = L;
+    const b = bilanSemaine(L), auj = aujourdhui();
+    const avant = pointsSemaine(decaler(L, -7));
+    const charges = b.jours.filter(j => j.minutes > CONFIG.surcharge);
+    const pire = b.jours.reduce((a, j) => (j.minutes > a.minutes ? j : a), b.jours[0]);
+    const hum = charges.length >= 2 ? 'fatiguee' : (b.taches && b.faites / b.taches >= .8) || b.gardes ? 'joyeuse' : 'curieuse';
+    const fin = decaler(L, 6);
+    const jourMois = (k, mois) => { const d = parse(k).getDate(); return (d === 1 ? '1er' : String(d)) + (mois ? ' ' + fmt(k, { month: 'long' }) : ''); };
+    const periode = `Du ${jourMois(L, parse(L).getMonth() !== parse(fin).getMonth())} au ${jourMois(fin, true)}`;
+    // Heures par catégorie, la plus grosse en haut ; « Pour moi » à part
+    const lignes = Object.entries(b.parCat).map(([c, m]) => ({ nom: cat(c).nom, c: cat(c).couleur, m }));
+    if (b.minLibres) lignes.push({ nom: 'Pour moi', c: LIBRE.c, m: b.minLibres });
+    lignes.sort((x, y) => y.m - x.m || x.nom.localeCompare(y.nom, 'fr'));
+    const maxH = Math.max(1, ...lignes.map(l => l.m));
+    const totalH = Object.values(b.parCat).reduce((a, m) => a + m, 0);
+    // Colonnes jour par jour
+    const maxJ = Math.max(4 * 60, ...b.jours.map(j => j.minutes));
+    const hauteur = m => Math.round(m / maxJ * 100);
+    const HAUT_COL = 112;   // px pour la plus haute barre : 150 de cadre − 16 de marge − 17 pour l'étiquette au-dessus − un peu d'air
+    const seuilVisible = maxJ >= CONFIG.surcharge * .8;
+    const ecart = b.points - avant;
+    const faits = [];
+    if (pire.minutes) faits.push(`Journée la plus chargée : ${fmt(pire.k, { weekday: 'long', day: 'numeric' })}, ${duree(pire.minutes)}.`);
+    if (charges.length) faits.push(`${charges.length} journée${charges.length > 1 ? 's' : ''} au-delà de ${duree(CONFIG.surcharge)}${charges.length > 1 ? ' : allège si tu peux.' : '.'}`);
+    if (b.libres) faits.push(`Temps pour moi : ${b.gardes} gardé${b.gardes > 1 ? 's' : ''}${b.libres - b.gardes ? `, ${b.libres - b.gardes} grignoté${b.libres - b.gardes > 1 ? 's' : ''} ou sans points` : ''}.`);
+    $('#sm-corps').innerHTML = `
+      <div class="sm-nav">
+        <button type="button" class="sm-fleche" data-sm="prec" aria-label="Semaine précédente">${ICONE.gauche}</button>
+        <p><b>${esc(periode)}</b><small>${b.enCours ? 'Semaine en cours' : L === decaler(lundiDe(auj), -7) ? 'Semaine dernière' : 'Semaine ' + numeroSemaine(L)}</small></p>
+        <button type="button" class="sm-fleche" data-sm="suiv" aria-label="Semaine suivante"${b.enCours ? ' disabled' : ''}>${ICONE.droite}</button>
+      </div>
+      <div class="carte-guts basse">
+        <div class="grand-renard">${renard(stade().id, hum)}</div>
+        <p class="phrase">${esc(phraseSemaine(b))}</p>
+      </div>
+      <div class="stats semaine-stats">
+        <div class="stat"><b>${b.faites}/${b.taches}</b><span>tâches tenues</span>${b.enCours ? '<span class="ecart">jusqu\'à aujourd\'hui</span>' : ''}</div>
+        <div class="stat"><b>${b.gardes}/${b.libres}</b><span>temps pour moi</span><span class="ecart">${b.minGardees ? duree(b.minGardees) + ' gardées' : 'gardés'}</span></div>
+        <div class="stat"><b>+${b.points}</b><span>points</span><span class="ecart">${ecart === 0 ? 'comme la semaine d\'avant' : `${ecart > 0 ? '▲ +' : '▼ −'}${Math.abs(ecart)} vs semaine d'avant`}</span></div>
+      </div>
+      ${lignes.length ? `<section class="graphe" aria-labelledby="sm-h1">
+        <h3 id="sm-h1">Heures prévues <span>${duree(totalH)}${b.minLibres ? ' + ' + duree(b.minLibres) + ' pour toi' : ''}</span></h3>
+        ${lignes.map(l => `<div class="h-ligne" title="${esc(l.nom)} : ${duree(l.m)}">
+          <span class="h-nom">${esc(l.nom)}</span>
+          <span class="h-piste" aria-hidden="true"><i style="--c:${l.c};width:${Math.max(2, l.m / maxH * 100)}%"></i></span>
+          <span class="h-val">${duree(l.m)}</span></div>`).join('')}
+        <p class="legende">Tâches et rendez-vous avec un horaire, par catégorie.</p>
+      </section>` : ''}
+      <section class="graphe" aria-labelledby="sm-h2">
+        <h3 id="sm-h2">Jour par jour</h3>
+        <div class="jours-graphe" aria-hidden="true">
+          ${seuilVisible ? `<div class="seuil" style="bottom:${hauteur(CONFIG.surcharge) / 100 * HAUT_COL}px"><span>${duree(CONFIG.surcharge)}</span></div>` : ''}
+          ${b.jours.map(j => `<div class="cj${j.minutes > CONFIG.surcharge ? ' charge' : ''}${j.avenir ? ' avenir' : ''}" title="${esc(cap(fmt(j.k, { weekday: 'long', day: 'numeric' })))} : ${duree(j.minutes)} prévues, ${j.faites}/${j.taches} tâches">
+            ${j.minutes ? `<span class="cj-val">${duree(j.minutes).replace(' 00', '')}</span>` : ''}<span class="cj-barre" style="height:${hauteur(j.minutes) / 100 * HAUT_COL}px"></span></div>`).join('')}
+        </div>
+        <div class="jours-bas" aria-hidden="true">${b.jours.map((j, i) => `<div><b${j.k === auj ? ' class="auj"' : ''}>${INITIALES[i]}</b><small>${j.taches ? j.faites + '/' + j.taches : '–'}</small></div>`).join('')}</div>
+        <p class="legende">Hauteur : heures prévues. Sous chaque jour : tâches faites / prévues.${charges.length ? ` ▲ : plus de ${duree(CONFIG.surcharge)}.` : ''}${b.enCours ? ' Plus clair : à venir.' : ''}</p>
+        <table class="masque"><caption>Jour par jour</caption><thead><tr><th scope="col">Jour</th><th scope="col">Heures prévues</th><th scope="col">Tâches faites</th></tr></thead>
+          <tbody>${b.jours.map(j => `<tr><th scope="row">${esc(cap(fmt(j.k, { weekday: 'long', day: 'numeric' })))}</th><td>${duree(j.minutes)}</td><td>${j.faites} sur ${j.taches}</td></tr>`).join('')}</tbody></table>
+      </section>
+      ${faits.length ? `<ul class="faits-semaine">${faits.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}`;
+    if (!SM.open) SM.showModal();
+  }
+  // Numéro de semaine ISO
+  function numeroSemaine(k) {
+    const [y, m, j] = k.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1, j));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));          // jeudi de la même semaine
+    return Math.ceil(((d - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+  }
+  SM.addEventListener('click', e => {
+    const b = e.target.closest('[data-sm]');
+    if (!b || b.disabled) return;
+    if (b.dataset.sm === 'fermer') { SM.close(); return; }
+    const L = decaler(U.semaine, b.dataset.sm === 'prec' ? -7 : 7);
+    ouvrirSemaine(L);
+    const f = SM.querySelector(`[data-sm="${b.dataset.sm}"]`);
+    if (f && !f.disabled) f.focus(); else SM.querySelector('[data-sm="prec"]').focus();
+  });
+  SM.addEventListener('close', () => render());
 
   // ---------- Rappel de sauvegarde ----------
   // Tous les 7 jours sans sauvegarde (à partir du 3e jour d'utilisation) ; « plus tard » le cache 3 jours.
