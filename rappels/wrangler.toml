@@ -1,0 +1,14 @@
+# Guts : service de rappels. Déployé par GitHub Actions (.github/workflows/rappels.yml).
+name = "guts-rappels"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# Chaque minute : envoyer les rappels de la minute écoulée
+[triggers]
+crons = ["* * * * *"]
+
+# L'identifiant est rempli par le déploiement (espace KV « guts-rappels », créé s'il n'existe pas)
+[[kv_namespaces]]
+binding = "RAPPELS"
+id = "@KV_ID@"

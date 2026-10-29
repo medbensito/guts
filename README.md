@@ -11,3 +11,6 @@ Calendrier personnel avec Guts, un renard qui grandit avec les tâches tenues et
 - `index.html` : l'application, assemblée par `build.sh` à partir de `src/page.html` et `src/renard.js`.
 - `sw.js` : fonctionnement hors ligne (réseau d'abord, copie en cache sinon).
 - `manifest.webmanifest`, `icones/` : installation sur l'écran d'accueil.
+- `rappels/` : le service de rappels (Cloudflare Worker, Web Push chiffré, tâche planifiée chaque minute).
+  Déployé par `.github/workflows/rappels.yml` (secrets `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`),
+  qui publie son adresse dans `rappels.json`. Ne pas modifier ce fichier à la main.

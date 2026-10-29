@@ -579,7 +579,7 @@
 (() => {
   'use strict';
   const CLE = 'guts-cal-v1';
-  const VERSION = 20;
+  const VERSION = 21;
 
   // ---------- Réglages ----------
   const CONFIG = {
@@ -595,6 +595,7 @@
     surcharge: 10 * 60,                                // au-delà (minutes prévues dans la journée), Guts est fatigué
     creneaux: { debut: 8 * 60, fin: 21 * 60 },         // « prochain créneau libre » : cherché entre ces heures
     durees: [15, 30, 45, 60, 90, 120, 180],            // durées proposées pour une tâche à caser
+    rappels: { horizon: 14, heureSauvegarde: 19 * 60 }, // jours envoyés d'avance au service ; heure du rappel de sauvegarde
     stades: [
       { id: 'renardeau',  nom: 'Renardeau',  seuil: 0,   echelle: 0.72 },
       { id: 'jeune',      nom: 'Jeune',      seuil: 80,  echelle: 0.86 },
@@ -622,13 +623,18 @@
   // Élément : { id, type: 'tache' | 'evenement', titre, cat, date, debut, fin (minutes depuis minuit, null = journée entière),
   //             rep: null | { freq, jusqua }, exceptions: { date: true }, faits: { date: true }, creeLe: horodatage }
   // payes : { clé d'occurrence : { pts, jour, type, raison? } } — points versés (ou refusés, pts 0) ; gains : { jour : { taches, libre } }
+  // Notifications : jeton auprès du service, choix de l'utilisateur, empreinte de la dernière liste envoyée
+  function rappelsVides() {
+    return { actif: false, jeton: null, service: null, avant: true, delai: 30, matin: true, heureMatin: 8 * 60, sauvegarde: true, signature: null, majLe: null, erreur: null };
+  }
   const vide = () => ({ elements: [], categories: CATS(), points: 0, gains: {}, payes: {}, bilanVu: null, vue: 'jour', derniereExport: null,
     depuis: null, rappelVu: null, importV14: false,
     acaser: [],             // tâches sans créneau : { id, titre, cat, duree, ajouteLe }
     theme: 'auto',          // 'auto' (suit l'iPhone), 'clair' ou 'sombre'
     bilanSemaineVu: null,   // lundi où le bilan de la semaine passée a été montré
     lachees: [],            // tâches laissées partir : { titre, date, lacheeLe }
-    retardVu: null });      // jour où les tâches pas faites ont été proposées
+    retardVu: null,         // jour où les tâches pas faites ont été proposées
+    rappels: null });       // notifications : voir rappelsVides()
   let S;
   try { S = Object.assign(vide(), JSON.parse(localStorage.getItem(CLE)) || {}); }
   catch (e) { S = vide(); }
@@ -636,6 +642,7 @@
     if (!Array.isArray(S.elements)) S.elements = [];
     if (!Array.isArray(S.acaser)) S.acaser = [];
     if (!Array.isArray(S.lachees)) S.lachees = [];
+    S.rappels = Object.assign(rappelsVides(), S.rappels && typeof S.rappels === 'object' ? S.rappels : {});
     if (S.lachees.length > 300) S.lachees.length = 300;
     S.acaser = S.acaser.filter(x => x && x.id && x.titre);
     S.acaser.forEach(x => { x.duree = Math.max(15, Math.min(24 * 60, Math.round(Number(x.duree) || 60))); });
@@ -653,7 +660,9 @@
   }
   nettoyer();
   let erreurStockage = false;
-  const sauver = () => {
+  // Enregistre, puis prévient le service de rappels si la liste des rappels a changé
+  const sauver = () => { ecrire(); planifierSynchro(); };
+  const ecrire = () => {
     nettoyer();
     // Journal et paiements : les quatre derniers mois suffisent
     const limite = decaler(aujourdhui(), -120);
@@ -795,6 +804,9 @@
       prendreDepuis(el.exceptions, o.k, 0);
     }
   }
+
+  // Service de rappels : adresse (undefined = pas encore cherchée, null = pas en place), clé publique, minuterie
+  const RAP = { service: undefined, cle: null, minuteur: null, enCours: false, reabonner: null };
 
   // ---------- État de l'écran (non enregistré) ----------
   const U = {
@@ -1509,6 +1521,7 @@
   // ---------- Réglages ----------
   const RG = $('#reglages');
   function renderReglages() {
+    setTimeout(preparerRappels, 0);
     const der = S.derniereExport ? new Date(S.derniereExport).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
     $('#r-corps').innerHTML = `
       <fieldset><legend>Catégories</legend>
@@ -1529,6 +1542,7 @@
         </div>
         <p class="note" style="margin-top:8px">Automatique suit le réglage clair ou sombre de ton téléphone.</p>
       </fieldset>
+      <fieldset id="r-rappels">${htmlRappels()}</fieldset>
       <fieldset><legend>Sauvegarde</legend>
         <p class="note">Tes données restent sur cet appareil. Exporte-les de temps en temps vers Fichiers ou iCloud Drive : c'est ce qui te permet de les retrouver si tu changes de téléphone ou supprimes l'app.</p>
         <p class="note" style="margin-top:6px"><b>${der ? 'Dernière sauvegarde : ' + der + '.' : 'Aucune sauvegarde pour l\'instant.'}</b></p>
@@ -1544,6 +1558,13 @@
     if (n != null) { const c = S.categories.find(x => x.id === n); if (c) { c.nom = e.target.value.trim() || c.nom; sauver(); renderHaut(); } }
   });
   RG.addEventListener('change', e => {
+    const opt = e.target.dataset.rapOpt;
+    if (opt) {
+      S.rappels[opt] = e.target.type === 'checkbox' ? e.target.checked : Number(e.target.value);
+      sauver();
+      majRappelsUI(null, `[data-rap-opt="${opt}"]`);
+      return;
+    }
     if (e.target.hasAttribute('data-theme-choix')) { S.theme = e.target.value; sauver(); appliquerTheme(); return; }
     const id = e.target.dataset.rcCouleur;
     if (id != null) { const c = S.categories.find(x => x.id === id); if (c) { c.couleur = e.target.value; sauver(); const r = e.target.closest('.r-cat'); if (r) r.style.setProperty('--c', c.couleur); } }
@@ -1577,6 +1598,14 @@
     if (a === 'importer') $('#fichier-import').click();
   });
   RG.addEventListener('close', () => render());
+  // Rappels : ces boutons ne passent par aucune attente avant l'appel (iOS n'accepte la demande d'autorisation que sur un toucher)
+  RG.addEventListener('click', e => {
+    const b = e.target.closest('[data-rap]');
+    if (!b || b.disabled) return;
+    if (b.dataset.rap === 'activer') activerRappels();
+    if (b.dataset.rap === 'essai') essaiRappels();
+    if (b.dataset.rap === 'couper') couperRappels();
+  });
 
   // ---------- Sauvegarde dans un fichier ----------
   const contenuSauvegarde = () => JSON.stringify({ app: 'guts', version: VERSION, exporteLe: new Date().toISOString(), donnees: S });
@@ -2401,6 +2430,222 @@
     dire(`Ancienne version reprise : ${pts} points, ${taches.length} tâche${taches.length > 1 ? 's' : ''}.`);
   }
 
+  // ---------- Rappels (notifications) ----------
+  // L'app calcule ses rappels des 14 prochains jours et les confie au service de rappels (rappels/ : un Worker Cloudflare),
+  // qui les envoie à l'heure par Web Push. L'adresse du service est publiée par le déploiement dans rappels.json.
+  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const installee = () => navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  const pushPossible = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const versOctets = c => { const b = atob(c.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((c.length + 3) % 4)); return Uint8Array.from(b, x => x.charCodeAt(0)); };
+  async function serviceRappels() {
+    if (RAP.service !== undefined) return RAP.service;
+    try {
+      const r = await fetch('rappels.json', { cache: 'no-store' });
+      const d = r.ok ? await r.json() : null;
+      RAP.service = d && /^https?:\/\//.test(d.url || '') ? d.url.replace(/\/+$/, '') : null;
+    } catch (e) { RAP.service = S.rappels.service || null; }   // hors ligne : la dernière adresse connue
+    if (RAP.service && RAP.service !== S.rappels.service) { S.rappels.service = RAP.service; ecrire(); }
+    return RAP.service;
+  }
+  async function cleVapid() {
+    if (RAP.cle) return RAP.cle;
+    const url = await serviceRappels();
+    if (!url) return null;
+    try { RAP.cle = (await (await fetch(url + '/cle')).json()).cle; } catch (e) { return null; }
+    return RAP.cle;
+  }
+  // Réglages ouverts : on cherche le service et sa clé d'avance, pour que « Activer » enchaîne sans attente
+  async function preparerRappels() {
+    if (!pushPossible()) return;
+    await serviceRappels();
+    await cleVapid();
+    majRappelsUI();
+  }
+  const enTete = () => ({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.rappels.jeton });
+
+  async function activerRappels() {
+    let perm;
+    try { perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; }
+    if (perm !== 'granted') { S.rappels.erreur = 'refuse'; ecrire(); majRappelsUI(); return; }
+    try {
+      const cle = RAP.cle || await cleVapid();
+      if (!cle) throw new Error('service');
+      const reg = await navigator.serviceWorker.ready;
+      const abo = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: versOctets(cle) });
+      const r = await fetch(RAP.service + '/abonner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ abonnement: abo.toJSON() }) });
+      if (!r.ok) throw new Error('abonner');
+      Object.assign(S.rappels, { jeton: (await r.json()).jeton, actif: true, erreur: null, signature: null });
+      ecrire();
+      await synchroniser(true);
+      majRappelsUI('Rappels activés. Essaie « Envoyer un essai ».', '[data-rap="essai"]');
+    } catch (e) {
+      S.rappels.erreur = 'reseau'; ecrire(); majRappelsUI();
+    }
+  }
+  // L'abonnement du téléphone, recréé s'il a disparu (iOS en perd parfois).
+  // neuf : le service push l'a refusé (410) : on le jette et on en demande un autre.
+  async function abonnementActuel(neuf) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let abo = await reg.pushManager.getSubscription();
+      if (abo && neuf) { try { await abo.unsubscribe(); } catch (e) { /* déjà mort */ } abo = null; }
+      if (!abo && Notification.permission === 'granted') {
+        const cle = await cleVapid();
+        if (cle) abo = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: versOctets(cle) });
+      }
+      return abo ? abo.toJSON() : null;
+    } catch (e) { return null; }
+  }
+  async function reinscrire() {
+    const abo = await abonnementActuel();
+    if (!abo) { S.rappels.erreur = 'perdu'; ecrire(); return false; }
+    const r = await fetch(RAP.service + '/abonner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ abonnement: abo }) });
+    if (!r.ok) return false;
+    S.rappels.jeton = (await r.json()).jeton;
+    ecrire();
+    return true;
+  }
+
+  // Ce que Guts dira, et quand
+  const tachesPasFaitesAvant = k => {
+    let n = 0;
+    for (let i = 1; i <= 7; i++) n += duJour(decaler(k, -i)).filter(o => o.el.type === 'tache' && !o.fait).length;
+    return n;
+  };
+  function texteMatin(k) {
+    const auj = aujourdhui(), occs = duJour(k);
+    const t = occs.filter(o => o.el.type === 'tache' && !o.fait).length, ev = occs.filter(o => o.el.type === 'evenement').length;
+    const parts = [];
+    if (t) parts.push(`${t} tâche${t > 1 ? 's' : ''} aujourd'hui`);
+    if (ev) parts.push(`${ev} rendez-vous`);
+    if (k <= decaler(auj, 1)) { const p = tachesPasFaitesAvant(k); if (p) parts.push(`${p} pas faite${p > 1 ? 's' : ''} à décider`); }   // connu seulement pour aujourd'hui et demain
+    if (indexJour(k) === 0) parts.push('le bilan de la semaine t\'attend');
+    return parts.length ? cap(parts.join(' · ')) + '.' : '';
+  }
+  function calculerRappels() {
+    const R = S.rappels, auj = aujourdhui(), debutJour = parse(auj).getTime(), res = [];
+    for (let i = 0; i < CONFIG.rappels.horizon; i++) {
+      const k = decaler(auj, i), occs = duJour(k);
+      if (R.avant) occs.forEach(o => {
+        if (o.el.type === 'libre' || o.el.debut == null || (o.el.type === 'tache' && o.fait)) return;
+        const at = debutOcc(o) - R.delai * 6e4;
+        if (at >= debutJour) res.push({ at, titre: o.el.titre, corps: `${R.delai >= 60 ? 'Dans 1 h' : 'Dans ' + R.delai + ' min'} · ${hhmm(o.el.debut)} – ${hhmm(o.el.fin)} · ${cat(o.el.cat).nom}`, tag: o.cle });
+      });
+      if (R.matin) {
+        const at = parse(k).getTime() + R.heureMatin * 6e4, c = at >= debutJour && texteMatin(k);
+        if (c) res.push({ at, titre: 'Bonjour !', corps: c, tag: 'matin-' + k });
+      }
+    }
+    if (R.sauvegarde && S.elements.length) {
+      const der = S.derniereExport ? dk(new Date(S.derniereExport)) : (S.depuis || auj);
+      let k = decaler(der, 7);
+      if (k <= auj) k = minNow() < CONFIG.rappels.heureSauvegarde ? auj : decaler(auj, 1);
+      for (; k < decaler(auj, CONFIG.rappels.horizon); k = decaler(k, 7)) {
+        res.push({ at: parse(k).getTime() + CONFIG.rappels.heureSauvegarde * 6e4, titre: 'Pense à sauvegarder Guts',
+          corps: `${S.derniereExport ? `Ta dernière sauvegarde date de ${ecart(der, k)} jours.` : 'Tes données ne sont que sur ce téléphone.'} Réglages › Sauvegarder.`, tag: 'sauvegarde-' + k });
+      }
+    }
+    return res.sort((a, b) => a.at - b.at || a.tag.localeCompare(b.tag));
+  }
+  const empreinte = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = (h * 33 + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + t.length; };
+
+  function planifierSynchro() {
+    if (!S.rappels || !S.rappels.actif) return;
+    clearTimeout(RAP.minuteur);
+    RAP.minuteur = setTimeout(() => synchroniser(), 2500);
+  }
+  // Envoie la liste au service si elle a changé (ou toutes les 12 h, pour que le service sache que l'app vit)
+  async function synchroniser(forcer) {
+    const R = S.rappels;
+    if (!R.actif || !R.jeton || RAP.enCours) return;
+    const url = await serviceRappels();
+    if (!url) return;
+    const liste = calculerRappels();
+    const sig = empreinte(JSON.stringify(liste));
+    if (!forcer && sig === R.signature && R.majLe && Date.now() - R.majLe < 12 * 3600e3) return;
+    RAP.enCours = true;
+    try {
+      const corps = { rappels: liste };
+      if (RAP.reabonner) corps.abonnement = RAP.reabonner;
+      const r = await fetch(url + '/rappels', { method: 'PUT', headers: enTete(), body: JSON.stringify(corps) });
+      if (r.status === 401) { RAP.enCours = false; if (await reinscrire()) return synchroniser(true); return; }
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json();
+      if (d.expire && !RAP.reabonner) {                   // le téléphone a perdu son abonnement : on en refait un
+        RAP.reabonner = await abonnementActuel(true);
+        RAP.enCours = false;
+        if (RAP.reabonner) return synchroniser(true);
+        R.erreur = 'perdu'; ecrire(); return;
+      }
+      RAP.reabonner = null;
+      Object.assign(R, { signature: sig, majLe: Date.now(), erreur: null, nombre: liste.filter(x => x.at > Date.now()).length });
+      ecrire();
+    } catch (e) {
+      R.erreur = 'reseau'; ecrire();
+    } finally {
+      RAP.enCours = false;
+      majRappelsUI();
+    }
+  }
+  async function essaiRappels() {
+    majRappelsUI('Envoi de l\'essai…', '[data-rap="essai"]');
+    try {
+      await synchroniser(true);
+      const d = await (await fetch(RAP.service + '/essai', { method: 'POST', headers: enTete() })).json();
+      majRappelsUI(d.ok ? 'Essai envoyé : regarde ton téléphone.' : 'L\'essai n\'est pas passé. Coupe puis réactive les rappels.', '[data-rap="essai"]');
+    } catch (e) { majRappelsUI('Le service de rappels ne répond pas.', '[data-rap="essai"]'); }
+  }
+  async function couperRappels() {
+    const R = S.rappels;
+    try { if (R.jeton && RAP.service) await fetch(RAP.service + '/abonner', { method: 'DELETE', headers: enTete() }); } catch (e) { /* le service oubliera ce client de lui-même */ }
+    try { const abo = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); if (abo) await abo.unsubscribe(); } catch (e) { /* rien à défaire */ }
+    Object.assign(R, { actif: false, jeton: null, signature: null, majLe: null, erreur: null });
+    ecrire();
+    majRappelsUI('Rappels coupés.', '[data-rap="activer"]');
+  }
+
+  function statutRappels() {
+    const R = S.rappels;
+    if (R.erreur === 'reseau') return 'Dernière mise à jour impossible : le service de rappels ne répond pas. Guts réessaiera.';
+    if (R.erreur === 'perdu') return 'Le téléphone a perdu l\'autorisation. Coupe puis réactive les rappels.';
+    if (!R.majLe) return 'Rappels actifs.';
+    return `Rappels actifs · ${R.nombre || 0} à venir · mis à jour à ${new Date(R.majLe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.`;
+  }
+  function htmlRappels(msg) {
+    const R = S.rappels;
+    let h = '<legend>Rappels</legend>';
+    if (!pushPossible() || (IOS && !installee())) {
+      return h + `<p class="note">${IOS && !installee() ? "Pour recevoir des rappels, ouvre Guts depuis son icône sur l'écran d'accueil (dans Safari : Partager › Sur l'écran d'accueil)." : 'Ce navigateur ne peut pas recevoir de rappels.'}</p>`;
+    }
+    if (RAP.service === null) return h + '<p class="note">Le service de rappels n\'est pas encore en place.</p>';
+    if (!R.actif) {
+      const texte = R.erreur === 'refuse' ? 'Les notifications sont bloquées pour Guts. Autorise-les dans Réglages de l\'iPhone › Notifications › Guts, puis réessaie.'
+        : R.erreur === 'reseau' ? 'Le service de rappels ne répond pas. Vérifie ta connexion et réessaie.'
+        : 'Guts te prévient avant tes tâches et rendez-vous, le matin, et quand il est temps de sauvegarder.';
+      return h + `<p class="note">${msg || texte}</p><div class="actions"><button type="button" class="bouton" data-rap="activer"${RAP.service === undefined ? ' disabled' : ''}>Activer les rappels</button></div>`;
+    }
+    const heures = []; for (let m = 6 * 60; m <= 10 * 60; m += 30) heures.push(m);
+    return h + `<div class="groupe">
+        <label class="rang"><span>Avant tâches et rendez-vous</span><span class="interrupteur"><input type="checkbox" role="switch" data-rap-opt="avant"${R.avant ? ' checked' : ''}><i></i></span></label>
+        ${R.avant ? `<label class="rang"><span>Combien avant</span><select data-rap-opt="delai">${[5, 10, 15, 30, 60].map(m => `<option value="${m}"${m === R.delai ? ' selected' : ''}>${m === 60 ? '1 h' : m + ' min'}</option>`).join('')}</select></label>` : ''}
+        <label class="rang"><span>Le matin</span><span class="interrupteur"><input type="checkbox" role="switch" data-rap-opt="matin"${R.matin ? ' checked' : ''}><i></i></span></label>
+        ${R.matin ? `<label class="rang"><span>À quelle heure</span><select data-rap-opt="heureMatin">${heures.map(m => `<option value="${m}"${m === R.heureMatin ? ' selected' : ''}>${hhmm(m)}</option>`).join('')}</select></label>` : ''}
+        <label class="rang"><span>Sauvegarde (chaque semaine)</span><span class="interrupteur"><input type="checkbox" role="switch" data-rap-opt="sauvegarde"${R.sauvegarde ? ' checked' : ''}><i></i></span></label>
+      </div>
+      <p class="note" role="status" style="margin-top:8px">${esc(msg || statutRappels())}</p>
+      <div class="actions" style="margin-top:8px"><button type="button" class="bouton clair" data-rap="essai">Envoyer un essai</button>
+        <button type="button" class="lien fort" data-rap="couper" style="justify-self:auto">Couper les rappels</button></div>`;
+  }
+  // Redessine seulement la rubrique Rappels (le reste des Réglages et le focus ne bougent pas)
+  function majRappelsUI(msg, focus) {
+    const f = document.getElementById('r-rappels');
+    if (!f || !RG.open) return;
+    const actif = document.activeElement && f.contains(document.activeElement) ? (document.activeElement.dataset.rap ? `[data-rap="${document.activeElement.dataset.rap}"]` : document.activeElement.dataset.rapOpt ? `[data-rap-opt="${document.activeElement.dataset.rapOpt}"]` : null) : null;
+    f.innerHTML = htmlRappels(msg);
+    const cible = (focus && f.querySelector(focus)) || (actif && f.querySelector(actif));
+    if (cible && (focus || actif)) cible.focus();
+  }
+
   // ---------- Thème clair ou sombre ----------
   const SOMBRE = window.matchMedia('(prefers-color-scheme: dark)');
   function appliquerTheme() {
@@ -2433,7 +2678,7 @@
     if (l) { l.style.top = m / 60 * H + 'px'; const s = l.querySelector('span'); if (s) s.textContent = hhmm(m); }
   }
   setInterval(rafraichir, 15000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) rafraichir(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { rafraichir(); synchroniser(); } });
 
   // Hors ligne : service worker, seulement quand la page est servie par un site (pas en fichier local)
   if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
@@ -2447,6 +2692,7 @@
   U.humeur = humeur();
   render();
   if (!montrerBilan()) montrerRetard();
+  synchroniser();
   if (erreurStockage) dire("Attention : les données n'ont pas pu être enregistrées sur cet appareil.");
 })();
 </script>
