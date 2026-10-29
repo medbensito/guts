@@ -423,6 +423,23 @@
   .faits-semaine li { display: flex; gap: 10px; font-size: 14px; line-height: 1.4; }
   .faits-semaine li::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--encre); }
 
+  /* ---------- Pas faites (fin de journée) ---------- */
+  .rt-ligne { background: var(--champ); border: 2px solid var(--trait); border-left: 5px solid var(--c); border-radius: 10px; padding: 10px 12px; display: grid; gap: 10px; }
+  .rt-haut { display: flex; gap: 10px; align-items: center; }
+  .rt-quoi { min-width: 0; }
+  .rt-quoi b { display: block; font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rt-quoi small { display: block; font-size: 12px; color: var(--gris); margin-top: 1px; }
+  .rt-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .rt-actions .bouton { min-height: 38px; padding: 0 12px; font-size: 11px; box-shadow: 2px 2px 0 var(--noir); }
+  .lien-discret { border: 0; background: none; color: var(--gris); font-weight: 700; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 8px 4px; min-height: 38px; margin-left: auto; }
+  .rt-msg { flex: none; margin: 0; padding: 8px 14px; background: var(--encre); color: var(--papier); font-weight: 700; font-size: 14px; }
+  .rt-msg:empty { display: none; }
+  .rt-fini { text-align: center; display: grid; gap: 6px; justify-items: center; }
+  .rt-fini .grand-renard { height: 130px; }
+  .rt-fini .grand-renard .fox { width: 124px; height: 124px; }
+  .rt-fini p { margin: 0; font-weight: 800; font-size: 16px; }
+  .section-retard .titre-jour .lien { font-size: 13px; min-height: 0; padding: 0; text-transform: none; letter-spacing: 0; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -529,6 +546,16 @@
   <div class="f-corps" id="g-corps"></div>
 </dialog>
 
+<dialog class="feuille" id="retard" aria-labelledby="rt-titre">
+  <div class="f-haut">
+    <span></span>
+    <h2 id="rt-titre">Pas faites</h2>
+    <button type="button" class="lien fort" data-rt="fermer">OK</button>
+  </div>
+  <p class="rt-msg" id="rt-msg" role="status" aria-live="polite"></p>
+  <div class="f-corps" id="rt-corps"></div>
+</dialog>
+
 <dialog class="feuille" id="semaine" aria-labelledby="sm-titre">
   <div class="f-haut">
     <span></span>
@@ -552,7 +579,7 @@
 (() => {
   'use strict';
   const CLE = 'guts-cal-v1';
-  const VERSION = 19;
+  const VERSION = 20;
 
   // ---------- Réglages ----------
   const CONFIG = {
@@ -597,15 +624,19 @@
   // payes : { clé d'occurrence : { pts, jour, type, raison? } } — points versés (ou refusés, pts 0) ; gains : { jour : { taches, libre } }
   const vide = () => ({ elements: [], categories: CATS(), points: 0, gains: {}, payes: {}, bilanVu: null, vue: 'jour', derniereExport: null,
     depuis: null, rappelVu: null, importV14: false,
-    acaser: [],
-    theme: 'auto',
-    bilanSemaineVu: null });   // lundi où le bilan de la semaine passée a été montré   // 'auto' (suit l'iPhone), 'clair' ou 'sombre'   // tâches sans créneau : { id, titre, cat, duree, ajouteLe }
+    acaser: [],             // tâches sans créneau : { id, titre, cat, duree, ajouteLe }
+    theme: 'auto',          // 'auto' (suit l'iPhone), 'clair' ou 'sombre'
+    bilanSemaineVu: null,   // lundi où le bilan de la semaine passée a été montré
+    lachees: [],            // tâches laissées partir : { titre, date, lacheeLe }
+    retardVu: null });      // jour où les tâches pas faites ont été proposées
   let S;
   try { S = Object.assign(vide(), JSON.parse(localStorage.getItem(CLE)) || {}); }
   catch (e) { S = vide(); }
   function nettoyer() {
     if (!Array.isArray(S.elements)) S.elements = [];
     if (!Array.isArray(S.acaser)) S.acaser = [];
+    if (!Array.isArray(S.lachees)) S.lachees = [];
+    if (S.lachees.length > 300) S.lachees.length = 300;
     S.acaser = S.acaser.filter(x => x && x.id && x.titre);
     S.acaser.forEach(x => { x.duree = Math.max(15, Math.min(24 * 60, Math.round(Number(x.duree) || 60))); });
     if (!Array.isArray(S.categories) || !S.categories.length) S.categories = CATS();
@@ -1104,7 +1135,8 @@
 
   function vueListe() {
     const auj = aujourdhui();
-    let h = sectionCaser(), total = S.acaser.length;
+    const retard = enAttente();
+    let h = sectionRetard(retard) + sectionCaser(), total = S.acaser.length + retard.length;
     for (let i = 0; i < CONFIG.joursListe; i++) {
       const k = decaler(auj, i);
       const occs = duJour(k);
@@ -1138,6 +1170,18 @@
       <button type="button" class="tiroir-barre" data-action="tiroir" aria-expanded="${!!U.tiroir}" aria-controls="tiroir-contenu" data-focus="tiroir">
         <span>À caser</span><b aria-label="${S.acaser.length} tâche${S.acaser.length > 1 ? 's' : ''}">${S.acaser.length}</b><i aria-hidden="true">▲</i></button>
     </div>`;
+  }
+  function sectionRetard(liste) {
+    if (!liste.length) return '';
+    return `<section class="section-caser section-retard" aria-label="Pas faites">
+      <h2 class="titre-jour"><span>Pas faites · ${liste.length}</span><button type="button" class="lien fort" data-action="decider" data-focus="decider">Décider</button></h2>
+      ${liste.map(o => `<div class="ligne-occ" style="${styleEl(o.el)}">
+        <span class="marque">${caseTache(o)}</span>
+        <button type="button" class="ouvrir" data-ouvrir="${o.cle}" aria-label="${esc(description(o))}, pas faite" data-focus="o${o.cle}">
+          <span class="heures">${esc(nomCourt(o.k))}<small>${o.el.debut == null ? 'journée' : hhmm(o.el.debut)}</small></span>
+          <span class="quoi"><b>${esc(o.el.titre)}</b><small>${esc(cat(o.el.cat).nom)} · pas faite</small></span></button>
+      </div>`).join('')}
+    </section>`;
   }
   function sectionCaser() {
     const lignes = S.acaser.map(x => `<div class="ligne-occ" style="${styleCat(x.cat)}">
@@ -1875,6 +1919,7 @@
     if (d.caser) return ouvrirCaser(d.caser);
     if (d.caserOuvrir) return ouvrirCaser(d.caserOuvrir);
     if (d.caserAuto) return caserAuto(d.caserAuto);
+    if (d.action === 'decider') return ouvrirRetard();
     if (b.classList.contains('colonne')) {
       // Toucher un vide : enlève la sélection, ou pose une nouvelle plage d'une heure
       if (U.selection || U.brouillon) { U.selection = null; U.brouillon = null; return render(); }
@@ -2066,19 +2111,19 @@
   }
   function montrerBilan() {
     const auj = aujourdhui();
-    if (S.bilanVu === auj || new Date().getHours() < CONFIG.heures.finNuit || document.querySelector('dialog[open]')) return;
+    if (S.bilanVu === auj || new Date().getHours() < CONFIG.heures.finNuit || document.querySelector('dialog[open]')) return false;
     if (indexJour(auj) === 0 && S.bilanSemaineVu !== auj) {
       const L = decaler(auj, -7);
       S.bilanVu = auj; S.bilanSemaineVu = auj;
       sauver();
-      if (semaineVide(bilanSemaine(L))) return;
+      if (semaineVide(bilanSemaine(L))) return false;
       ouvrirSemaine(L);
-      return;
+      return true;
     }
     const k = decaler(auj, -1), b = bilanDe(k);
     S.bilanVu = auj;
     sauver();
-    if (!b.taches && !b.libres && !b.points) return;          // rien à raconter
+    if (!b.taches && !b.libres && !b.points) return false;    // rien à raconter
     const content = b.taches && b.faites === b.taches || b.gardes;
     $('#b-corps').innerHTML = `
       <p class="bilan-date">${esc(cap(fmt(k, { weekday: 'long', day: 'numeric', month: 'long' })))}</p>
@@ -2091,11 +2136,107 @@
         <div class="stat"><b>${b.gardes}/${b.libres}</b><span>temps pour moi</span></div>
         <div class="stat"><b>+${b.points}</b><span>points</span></div>
       </div>
-      <button type="button" class="bouton" data-b="ok">C'est parti</button>`;
+      <button type="button" class="bouton" data-b="ok">${retardDu() ? 'Continuer' : "C'est parti"}</button>`;
     BD.showModal();
+    return true;
   }
   BD.addEventListener('click', e => { if (e.target.closest('[data-b="ok"]')) BD.close(); });
-  BD.addEventListener('close', () => render());
+  BD.addEventListener('close', () => { render(); montrerRetard(); });
+
+  // ---------- Pas faites : décider de chaque tâche non cochée des 7 derniers jours ----------
+  function enAttente() {
+    const auj = aujourdhui(), res = [];
+    for (let i = 7; i >= 1; i--) duJour(decaler(auj, -i)).forEach(o => { if (o.el.type === 'tache' && !o.fait) res.push(o); });
+    return res;
+  }
+  // À proposer ce matin ?
+  const retardDu = () => S.retardVu !== aujourdhui() && new Date().getHours() >= CONFIG.heures.finNuit && enAttente().length > 0;
+  function montrerRetard() {
+    if (!retardDu() || document.querySelector('dialog[open]')) return false;
+    S.retardVu = aujourdhui();
+    sauver();
+    ouvrirRetard();
+    return true;
+  }
+  // Où la refaire : même heure aujourd'hui si elle est encore à venir, sinon le prochain créneau libre
+  function cibleRefaire(o) {
+    const auj = aujourdhui();
+    if (o.el.debut == null) return { k: auj, debut: null };
+    if (o.el.debut >= minNow() + 5) return { k: auj, debut: o.el.debut };
+    const c = prochainCreneau(o.el.fin - o.el.debut);
+    return c || { k: decaler(auj, 1), debut: o.el.debut };
+  }
+  const nomCourt = k => k === aujourdhui() ? "Aujourd'hui" : k === decaler(aujourdhui(), 1) ? 'Demain' : k === decaler(aujourdhui(), -1) ? 'Hier' : cap(fmt(k, { weekday: 'long', day: 'numeric' }));
+  const RT = $('#retard');
+  function ouvrirRetard(focus, msg) {
+    $('#rt-msg').textContent = msg || '';
+    const liste = enAttente();
+    $('#rt-corps').innerHTML = liste.length ? `
+      <p class="note">Ces tâches n'ont pas été cochées. Pour chacune : la refaire, la remettre à caser, ou la laisser partir, sans regret. Coche-la si tu l'avais faite. Ce que tu ne décides pas reste ici.</p>
+      ${liste.map(o => {
+        const c = cibleRefaire(o);
+        const ou = `${nomCourt(c.k)}${c.debut != null ? ' ' + hhmm(c.debut) : ''}`;
+        return `<div class="rt-ligne" style="${styleEl(o.el)}">
+          <div class="rt-haut">
+            <button type="button" class="case" role="checkbox" aria-checked="false" data-rt="faite" data-cle="${o.cle}" aria-label="${esc(o.el.titre)} : je l'ai faite">${ICONE.coche}</button>
+            <div class="rt-quoi"><b>${esc(o.el.titre)}</b><small>${esc(nomCourt(o.k))} · ${o.el.debut == null ? 'journée' : hhmm(o.el.debut) + ' – ' + hhmm(o.el.fin)} · ${esc(cat(o.el.cat).nom)}</small></div>
+          </div>
+          <div class="rt-actions">
+            <button type="button" class="bouton" data-rt="refaire" data-cle="${o.cle}" aria-label="Refaire « ${esc(o.el.titre)} » : ${esc(ou)}">${esc(ou)}</button>
+            <button type="button" class="bouton clair" data-rt="caser" data-cle="${o.cle}" aria-label="Mettre « ${esc(o.el.titre)} » à caser">À caser</button>
+            <button type="button" class="lien-discret" data-rt="lacher" data-cle="${o.cle}" aria-label="Laisser partir « ${esc(o.el.titre)} »">Laisser partir</button>
+          </div>
+        </div>`;
+      }).join('')}` : `
+      <div class="rt-fini"><div class="grand-renard">${renard(stade().id, 'joyeuse')}</div><p>Tout est décidé. Place à aujourd'hui.</p></div>`;
+    if (!RT.open) RT.showModal();
+    const cible = focus && RT.querySelector(focus) || (liste.length ? RT.querySelector('[data-rt="refaire"]') : RT.querySelector('[data-rt="fermer"]'));
+    if (cible) cible.focus();
+  }
+  // Une décision, depuis la feuille : renvoie le message
+  function decider(action, o) {
+    const t = o.el.titre;
+    if (action === 'faite') return basculer(o);
+    if (action === 'refaire') {
+      const c = cibleRefaire(o);
+      const champs = o.el.debut == null ? { date: c.k } : { date: c.k, debut: c.debut, fin: Math.min(c.debut + o.el.fin - o.el.debut, 1440) };
+      const cle = appliquer(o, champs, 'une');
+      return `« ${t} » : ${quand(c.k, champs.debut != null ? champs.debut : 0, champs.fin != null ? champs.fin : 0).replace(/, 00:00 – 00:00$/, ', journée')}.` + (avertirTexte(cle) ? ' ' + avertirTexte(cle) : '');
+    }
+    if (action === 'caser') {
+      ajouterACaser(t, { cat: o.el.cat, duree: o.el.debut == null ? CONFIG.duree : o.el.fin - o.el.debut });
+      supprimerOcc(o, 'une');
+      return `« ${t} » remise à caser.`;
+    }
+    if (action === 'lacher') {
+      supprimerOcc(o, 'une');
+      S.lachees.unshift({ titre: t, date: o.k, lacheeLe: aujourdhui() });
+      return `« ${t} » laissée partir. Sans regret.`;
+    }
+    return '';
+  }
+  // Texte d'avertissement si la tâche replacée empiète sur un temps pour moi
+  function avertirTexte(cle) {
+    const o = trouver(cle);
+    if (!o || o.el.debut == null) return '';
+    const l = duJour(o.k).find(x => x.el.type === 'libre' && x.el.debut < o.el.fin && x.el.fin > o.el.debut && !S.payes[x.cle]);
+    return l ? `Attention : ça empiète sur « ${l.el.titre} ».` : '';
+  }
+  RT.addEventListener('click', e => {
+    const b = e.target.closest('[data-rt]');
+    if (!b) return;
+    if (b.dataset.rt === 'fermer') { RT.close(); return; }
+    const o = trouver(b.dataset.cle);
+    if (!o) return;
+    const lignes = [...RT.querySelectorAll('.rt-ligne')];
+    const i = lignes.indexOf(b.closest('.rt-ligne'));
+    let msg = decider(b.dataset.rt, o);
+    if (U.grandi) { msg += ` Guts grandit : ${U.grandi.nom} !`; U.grandi = null; }
+    sauver();
+    // Message dans la feuille (un message bref serait caché dessous) ; le fil au clavier reste sur la ligne suivante
+    ouvrirRetard(`.rt-ligne:nth-of-type(${i + 1}) [data-rt="refaire"]`, msg);
+  });
+  RT.addEventListener('close', () => render());
 
   // ---------- Bilan de la semaine ----------
   // Semaine du lundi L. Les tâches comptent jusqu'à aujourd'hui ; les temps pour moi, une fois terminés ;
@@ -2164,6 +2305,8 @@
     const faits = [];
     if (pire.minutes) faits.push(`Journée la plus chargée : ${fmt(pire.k, { weekday: 'long', day: 'numeric' })}, ${duree(pire.minutes)}.`);
     if (charges.length) faits.push(`${charges.length} journée${charges.length > 1 ? 's' : ''} au-delà de ${duree(CONFIG.surcharge)}${charges.length > 1 ? ' : allège si tu peux.' : '.'}`);
+    const lachees = S.lachees.filter(x => x.date >= L && x.date <= fin).length;
+    if (lachees) faits.push(`${lachees} tâche${lachees > 1 ? 's' : ''} laissée${lachees > 1 ? 's' : ''} partir sans regret.`);
     if (b.libres) faits.push(`Temps pour moi : ${b.gardes} gardé${b.gardes > 1 ? 's' : ''}${b.libres - b.gardes ? `, ${b.libres - b.gardes} grignoté${b.libres - b.gardes > 1 ? 's' : ''} ou sans points` : ''}.`);
     $('#sm-corps').innerHTML = `
       <div class="sm-nav">
@@ -2219,7 +2362,7 @@
     const f = SM.querySelector(`[data-sm="${b.dataset.sm}"]`);
     if (f && !f.disabled) f.focus(); else SM.querySelector('[data-sm="prec"]').focus();
   });
-  SM.addEventListener('close', () => render());
+  SM.addEventListener('close', () => { render(); montrerRetard(); });
 
   // ---------- Rappel de sauvegarde ----------
   // Tous les 7 jours sans sauvegarde (à partir du 3e jour d'utilisation) ; « plus tard » le cache 3 jours.
@@ -2275,7 +2418,7 @@
       if (U.date === dernierJour) U.date = auj;
       dernierJour = auj;
       crediter();
-      if (libre) { render(); montrerBilan(); }
+      if (libre) { render(); if (!montrerBilan()) montrerRetard(); }
       return;
     }
     const m = minNow();
@@ -2285,7 +2428,7 @@
     const paye = crediter();
     const hum = humeur();
     if (libre && (paye || hum !== U.humeur)) { U.humeur = hum; render(); grandir(); return; }
-    if (libre) montrerBilan();                 // première minute après finNuit, ou retour sur l'app
+    if (libre && !montrerBilan()) montrerRetard();   // première minute après finNuit, ou retour sur l'app
     const l = $('#vue .maintenant');
     if (l) { l.style.top = m / 60 * H + 'px'; const s = l.querySelector('span'); if (s) s.textContent = hhmm(m); }
   }
@@ -2303,7 +2446,7 @@
   U.reaction = false; U.grandi = null;
   U.humeur = humeur();
   render();
-  montrerBilan();
+  if (!montrerBilan()) montrerRetard();
   if (erreurStockage) dire("Attention : les données n'ont pas pu être enregistrées sur cet appareil.");
 })();
 </script>
