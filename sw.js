@@ -1,7 +1,7 @@
 // Guts : service worker. Garde l'app disponible hors ligne.
 // Réseau d'abord : en ligne, on reçoit toujours la dernière version ; hors ligne, la copie en cache prend le relais.
 // À chaque nouvelle version de l'app, changer le nom du cache ci-dessous.
-const CACHE = 'guts-cal-17';
+const CACHE = 'guts-cal-18';
 const FICHIERS = [
   './',
   './index.html',
