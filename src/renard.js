@@ -84,6 +84,13 @@
       <path d="M 62 72 L 98 72 L 98 93 L 66 84 Z M 138 72 L 102 72 L 102 93 L 134 84 Z" fill="${R.fourrure}"/>
       <path d="M 66 84 L 95 92 M 134 84 L 105 92" fill="none" ${trait(sw * 1.1)}/>
       ${nez}${bouche}`;
+    if (humeur === 'fatiguee') return `
+      ${ouverts}
+      <path d="M 64 79 L 97 79 L 97 95 Q 80.5 100 64 95 Z M 103 79 L 136 79 L 136 95 Q 119.5 100 103 95 Z" fill="${R.fourrure}"/>
+      <path d="M 67 95 Q 80.5 100 94 95 M 106 95 Q 119.5 100 133 95" fill="none" ${trait(sw * 1.05)}/>
+      ${nez}
+      <path d="M 92 120 Q 96 117 100 120 Q 104 123 108 120" fill="none" ${trait(sw * 0.75)}/>
+      <path d="M 146 62 Q 153 74 146 79 Q 139 74 146 62 Z" fill="${R.cyan}" ${trait(sw * 0.6)}/>`;
     // curieuse
     return `${ouverts}${nez}<ellipse cx="100" cy="120" rx="3" ry="3.4" fill="${R.nuit}"/>`;
   }
