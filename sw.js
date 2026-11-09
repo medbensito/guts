@@ -20,7 +20,8 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(cles => Promise.all(cles.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // Seulement les anciens caches de Guts : ASCEND vit sur la même origine et garde les siens
+      .then(cles => Promise.all(cles.filter(k => k.startsWith('guts-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

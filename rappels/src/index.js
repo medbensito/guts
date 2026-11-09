@@ -213,7 +213,11 @@ export default {
         return json({ ok: true, n: rappels.length, expire: !!c.expire });
       }
       if (chemin === '/essai' && req.method === 'POST') {
-        const statut = await envoyer(env, c.abonnement, { titre: 'Guts', corps: 'Les rappels marchent. Guts veille sur ton temps.', tag: 'essai' }, 600);
+        // L'app peut donner son propre texte (ASCEND partage ce service avec Guts)
+        const d = await req.json().catch(() => null) || {};
+        const titre = typeof d.titre === 'string' && d.titre.trim() ? d.titre.slice(0, 120) : 'Guts';
+        const corps = typeof d.corps === 'string' && d.corps.trim() ? d.corps.slice(0, 240) : 'Les rappels marchent. Guts veille sur ton temps.';
+        const statut = await envoyer(env, c.abonnement, { titre, corps, tag: 'essai' }, 600);
         if (statut === 404 || statut === 410) { c.expire = true; await ecrireEtat(env, etat); }
         return json({ ok: statut >= 200 && statut < 300, statut, expire: !!c.expire });
       }
